@@ -1,0 +1,130 @@
+# =========================================================
+# PACKAGE: lab.yaml
+# =========================================================
+# UBICACIÓN: /config/packages/lab.yaml
+# Contiene los 2 termostatos reales del Laboratorio y el
+# cálculo de consumo según el tablero de cargas real
+# (16 tubos 40W, 17 tomas 100W, 4 ventiladores 150W,
+# 2 aires 2.500W de 24.000 BTU).
+# =========================================================
+
+climate:
+  - platform: generic_thermostat
+    name: Aire Lab 1
+    heater: switch.lab_aire_1
+    target_sensor: sensor.temperatura_lab
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+  - platform: generic_thermostat
+    name: Aire Lab 2
+    heater: switch.lab_aire_2
+    target_sensor: sensor.temperatura_lab
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+template:
+  - sensor:
+      # ---------------- CONSUMO TOTAL (tablero de cargas real) ----------------
+      # C-1 Iluminación: 16x40W = 640W -> 320W por zona (2 luminarias c/u)
+      # C-2 Tomas: 17 x 100W = 1.700W
+      # C-3 Ventiladores: 4 x 150W = 600W
+      # C-4/C-5 Aires: 2 x 2.500W = 5.000W
+      - name: "Consumo Total Lab"
+        unique_id: consumo_total_lab
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set luces = (320 if is_state('light.lab_iluminacion_zona_pizarron','on') else 0)
+                        + (320 if is_state('light.lab_iluminacion_zona_general','on') else 0) %}
+          {% set aires = (2500 if is_state('switch.lab_aire_1','on') else 0)
+                        + (2500 if is_state('switch.lab_aire_2','on') else 0) %}
+          {% set ventiladores = (150 if is_state('fan.lab_ventilador_1','on') else 0)
+                               + (150 if is_state('fan.lab_ventilador_2','on') else 0)
+                               + (150 if is_state('fan.lab_ventilador_3','on') else 0)
+                               + (150 if is_state('fan.lab_ventilador_4','on') else 0) %}
+          {% set tomas = states.switch
+                | selectattr('entity_id', 'match', 'switch.lab_toma_')
+                | selectattr('state', 'eq', 'on')
+                | list | count * 100 %}
+          {{ luces + aires + ventiladores + tomas }}
+
+      # ---------------- CONFORT AMBIENTAL ----------------
+      - name: "Confort Ambiental Lab"
+        unique_id: confort_ambiental_lab
+        state: >
+          {% set t = states('sensor.temperatura_lab') | float(20) %}
+          {% set h = states('sensor.humedad_lab') | float(50) %}
+          {% if t >= 19 and t <= 26 and h >= 40 and h <= 60 %}
+            Óptimo
+          {% elif t >= 15 and t <= 30 and h >= 30 and h <= 70 %}
+            Aceptable
+          {% else %}
+            Fuera de rango
+          {% endif %}
+        icon: >
+          {% set t = states('sensor.temperatura_lab') | float(20) %}
+          {% set h = states('sensor.humedad_lab') | float(50) %}
+          {% if t >= 19 and t <= 26 and h >= 40 and h <= 60 %}
+            mdi:check-circle
+          {% elif t >= 15 and t <= 30 and h >= 30 and h <= 70 %}
+            mdi:alert-circle-outline
+          {% else %}
+            mdi:close-circle
+          {% endif %}
+
+sensor:
+  # ---------------- HORAS DE USO (hoy) ----------------
+  - platform: history_stats
+    name: "Horas Proyector Lab (hoy)"
+    entity_id: switch.lab_proyector
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Aire 1 Lab (hoy)"
+    entity_id: switch.lab_aire_1
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Aire 2 Lab (hoy)"
+    entity_id: switch.lab_aire_2
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Ventiladores Lab (hoy)"
+    entity_id: fan.lab_ventilador_1
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Presencia Lab (hoy)"
+    entity_id: binary_sensor.presencia_lab
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"

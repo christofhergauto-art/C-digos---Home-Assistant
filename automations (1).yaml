@@ -1,0 +1,2186 @@
+# =========================================================
+# automations.yaml
+# =========================================================
+# CONTROL DEL AIRE — simple, como un equipo real:
+# climate.aire_biblioteca_1 / climate.aire_biblioteca_2 son
+# termostatos de verdad (generic_thermostat). Se manejan
+# igual que cualquier aire: elegís temperatura deseada desde
+# la tarjeta del dashboard, y el equipo se prende/apaga solo
+# para sostenerla. No hay selectores ni modos extra.
+#
+# Atrás, 2 automatizaciones de seguridad actúan en los
+# extremos (calor y frío crítico) sin que el usuario tenga
+# que configurar nada — igual que la protección térmica de
+# un aire real.
+
+# ---------------------------------------------------------
+# 1) Presencia detectada: puerta física + luces + aire/vent.
+# ---------------------------------------------------------
+- id: biblioteca_presencia_on
+  alias: "Biblioteca - Presencia detectada"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.presencia_biblioteca
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: input_boolean.modo_automatico_biblioteca
+      state: "on"
+  action:
+    - service: virtual.turn_on
+      target:
+        entity_id: binary_sensor.puerta_principal_biblioteca
+    - delay:
+        seconds: 3
+    - service: virtual.turn_off
+      target:
+        entity_id: binary_sensor.puerta_principal_biblioteca
+    - service: light.turn_on
+      target:
+        entity_id:
+          - light.iluminacion_zona_1
+          - light.iluminacion_zona_2
+          - light.iluminacion_zona_3
+          - light.iluminacion_zona_4
+    - choose:
+        - conditions:
+            - condition: numeric_state
+              entity_id: sensor.temperatura_biblioteca
+              above: 26
+          sequence:
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_biblioteca_1
+                  - climate.aire_biblioteca_2
+                  - climate.aire_biblioteca_3
+              data:
+                hvac_mode: cool
+      default:
+        - service: fan.turn_on
+          target:
+            entity_id:
+              - fan.ventilador_1
+              - fan.ventilador_2
+  mode: single
+
+# ---------------------------------------------------------
+# 2) Temperatura crítica alta (>29°C): protección térmica,
+#    fuerza frío a 25°C + deshumidificador
+# ---------------------------------------------------------
+- id: biblioteca_temp_critica
+  alias: "Biblioteca - Temperatura crítica alta, programar aires a 25°C"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.temperatura_biblioteca
+      above: 29
+  action:
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        hvac_mode: cool
+    - service: climate.set_temperature
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        temperature: 25
+    - service: switch.turn_on
+      target:
+        entity_id: switch.deshumidificador_biblioteca
+  mode: single
+
+# ---------------------------------------------------------
+# 2b) Frío crítico (invierno / friagem paraguayo): protección
+#     térmica del lado del frío. NOTA TÉCNICA: el termostato
+#     (generic_thermostat) solo modela frío; para calefacción
+#     se comanda el switch físico directo, asumiendo equipo
+#     con bomba de calor (habitual en Paraguay). Es una
+#     protección de fondo, invisible para el usuario — no
+#     requiere elegir ningún modo.
+# ---------------------------------------------------------
+- id: biblioteca_temp_critica_baja
+  alias: "Biblioteca - Frío crítico, activar calefacción"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.temperatura_biblioteca
+      below: 12
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id:
+          - switch.aire_1
+          - switch.aire_2
+          - switch.aire_3
+    - service: persistent_notification.create
+      data:
+        title: "🥶 Biblioteca - Frío crítico"
+        message: "Temperatura por debajo de 12°C. Se activaron los equipos en modo calefacción."
+  mode: single
+
+- id: biblioteca_frio_critico_fin
+  alias: "Biblioteca - Fin de frío crítico, apagar calefacción"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.temperatura_biblioteca
+      above: 15
+      below: 22
+      for: "00:05:00"
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.aire_1
+          - switch.aire_2
+          - switch.aire_3
+  mode: single
+
+# ---------------------------------------------------------
+# 3) Nadie en la biblioteca: apagar todo
+# ---------------------------------------------------------
+- id: biblioteca_presencia_off
+  alias: "Biblioteca - Sin presencia, apagar todo"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.presencia_biblioteca
+      to: "off"
+      for: "00:02:00"
+  condition:
+    - condition: state
+      entity_id: input_boolean.modo_automatico_biblioteca
+      state: "on"
+  action:
+    - service: light.turn_off
+      target:
+        entity_id:
+          - light.iluminacion_zona_1
+          - light.iluminacion_zona_2
+          - light.iluminacion_zona_3
+          - light.iluminacion_zona_4
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        hvac_mode: "off"
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.aire_1
+          - switch.aire_2
+          - switch.aire_3
+    - service: fan.turn_off
+      target:
+        entity_id:
+          - fan.ventilador_1
+          - fan.ventilador_2
+    - service: switch.turn_off
+      target:
+        entity_id: switch.deshumidificador_biblioteca
+  mode: single
+
+# ---------------------------------------------------------
+# 4) Ventana abierta: pausar aires
+# ---------------------------------------------------------
+- id: biblioteca_ventana_abierta
+  alias: "Biblioteca - Ventana abierta, pausar aires"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ventana_biblioteca
+      to: "on"
+      for: "00:01:00"
+  action:
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        hvac_mode: "off"
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.aire_1
+          - switch.aire_2
+          - switch.aire_3
+  mode: single
+
+# ---------------------------------------------------------
+# 5) Deshumidificador ON (humedad alta)
+# ---------------------------------------------------------
+- id: biblioteca_humedad_alta
+  alias: "Biblioteca - Deshumidificador ON (humedad alta)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.humedad_biblioteca
+      above: 60
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.deshumidificador_biblioteca
+  mode: single
+
+# ---------------------------------------------------------
+# 6) Deshumidificador ON (humedad baja)
+# ---------------------------------------------------------
+- id: biblioteca_humedad_baja
+  alias: "Biblioteca - Deshumidificador ON (humedad baja)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.humedad_biblioteca
+      below: 40
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.deshumidificador_biblioteca
+  mode: single
+
+# ---------------------------------------------------------
+# 7) Deshumidificador OFF (humedad vuelve a 50%)
+# ---------------------------------------------------------
+- id: biblioteca_humedad_normal
+  alias: "Biblioteca - Deshumidificador OFF (humedad vuelve a 50%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.humedad_biblioteca
+      above: 49
+      below: 51
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id: switch.deshumidificador_biblioteca
+  mode: single
+
+# ---------------------------------------------------------
+# 8) SIMULACIÓN: deslizador de temperatura -> sensor virtual
+# ---------------------------------------------------------
+- id: biblioteca_sim_temperatura
+  alias: "Biblioteca - Sincronizar simulación de temperatura"
+  trigger:
+    - platform: state
+      entity_id: input_number.control_temperatura_biblioteca
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.temperatura_biblioteca
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+# ---------------------------------------------------------
+# 9) SIMULACIÓN: deslizador de humedad -> sensor virtual
+# ---------------------------------------------------------
+- id: biblioteca_sim_humedad
+  alias: "Biblioteca - Sincronizar simulación de humedad"
+  trigger:
+    - platform: state
+      entity_id: input_number.control_humedad_biblioteca
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.humedad_biblioteca
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+# ---------------------------------------------------------
+# 10) SIMULACIÓN: interruptor -> sensor de presencia virtual
+# ---------------------------------------------------------
+- id: biblioteca_sim_presencia
+  alias: "Biblioteca - Sincronizar simulación de presencia"
+  trigger:
+    - platform: state
+      entity_id: input_boolean.simular_presencia_biblioteca
+  action:
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.simular_presencia_biblioteca
+              state: "on"
+          sequence:
+            - service: virtual.turn_on
+              target:
+                entity_id: binary_sensor.presencia_biblioteca
+      default:
+        - service: virtual.turn_off
+          target:
+            entity_id: binary_sensor.presencia_biblioteca
+  mode: single
+
+# ---------------------------------------------------------
+# 11) Apertura institucional
+# ---------------------------------------------------------
+- id: biblioteca_apertura_institucional
+  alias: "Biblioteca - Apertura institucional"
+  trigger:
+    - platform: state
+      entity_id: schedule.horario_biblioteca
+      to: "on"
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "Biblioteca"
+        message: "La biblioteca abrió sus puertas. Sistema activo."
+  mode: single
+
+# ---------------------------------------------------------
+# 12) Cierre institucional
+# ---------------------------------------------------------
+- id: biblioteca_cierre_institucional
+  alias: "Biblioteca - Cierre institucional"
+  trigger:
+    - platform: state
+      entity_id: schedule.horario_biblioteca
+      to: "off"
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "Biblioteca"
+        message: "Cierre institucional. Apagando todo el sistema."
+    - service: light.turn_off
+      target:
+        entity_id:
+          - light.iluminacion_zona_1
+          - light.iluminacion_zona_2
+          - light.iluminacion_zona_3
+          - light.iluminacion_zona_4
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        hvac_mode: "off"
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.aire_1
+          - switch.aire_2
+          - switch.aire_3
+    - service: fan.turn_off
+      target:
+        entity_id:
+          - fan.ventilador_1
+          - fan.ventilador_2
+    - service: switch.turn_off
+      target:
+        entity_id: switch.deshumidificador_biblioteca
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.simular_presencia_biblioteca
+  mode: single
+
+# ---------------------------------------------------------
+# 13) Seguridad: presencia detectada FUERA de horario
+# ---------------------------------------------------------
+- id: biblioteca_presencia_fuera_horario
+  alias: "Biblioteca - Alerta: presencia fuera de horario"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.presencia_biblioteca
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: schedule.horario_biblioteca
+      state: "off"
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "⚠️ Biblioteca - Alerta de seguridad"
+        message: "Se detectó movimiento fuera del horario de atención."
+  mode: single
+
+# ---------------------------------------------------------
+# 14) Humo detectado
+# ---------------------------------------------------------
+- id: biblioteca_humo_detectado
+  alias: "Biblioteca - 🔥 Humo detectado"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.humo_biblioteca
+      to: "on"
+  action:
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        hvac_mode: "off"
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.aire_1
+          - switch.aire_2
+          - switch.aire_3
+    - service: fan.turn_off
+      target:
+        entity_id:
+          - fan.ventilador_1
+          - fan.ventilador_2
+    - service: light.turn_on
+      target:
+        entity_id:
+          - light.iluminacion_zona_1
+          - light.iluminacion_zona_2
+          - light.iluminacion_zona_3
+          - light.iluminacion_zona_4
+    - service: persistent_notification.create
+      data:
+        title: "🔥 ALERTA - Humo detectado"
+        message: "Se detectó humo en la Biblioteca. Aires apagados, luces encendidas para evacuación."
+  mode: single
+
+# ---------------------------------------------------------
+# 15) Consumo eléctrico elevado (umbral acorde al tablero real:
+#     capacidad instalada total ≈ 10.530W. 9000W = ~85%, cerca
+#     del máximo, con margen para detectar antes de saturar)
+# ---------------------------------------------------------
+- id: biblioteca_consumo_alto
+  alias: "Biblioteca - ⚡ Consumo eléctrico elevado"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.consumo_total_biblioteca
+      above: 9000
+      for: "00:05:00"
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "⚡ Consumo elevado"
+        message: "El consumo de la Biblioteca superó los 9000W durante 5 minutos seguidos (cerca de la capacidad máxima instalada). Revisar equipos."
+  mode: single
+
+# ---------------------------------------------------------
+# 16) Apagado automático de tomas por inactividad
+# ---------------------------------------------------------
+- id: biblioteca_apagado_tomas_inactividad
+  alias: "Biblioteca - Apagar tomas por inactividad prolongada"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.presencia_biblioteca
+      to: "off"
+      for: "00:30:00"
+  condition:
+    - condition: state
+      entity_id: input_boolean.apagado_automatico_tomas_biblioteca
+      state: "on"
+    - condition: state
+      entity_id: input_boolean.modo_automatico_biblioteca
+      state: "on"
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.toma_01
+          - switch.toma_02
+          - switch.toma_03
+          - switch.toma_04
+          - switch.toma_05
+          - switch.toma_06
+          - switch.toma_07
+          - switch.toma_08
+    - service: persistent_notification.create
+      data:
+        title: "Biblioteca - Ahorro de energía"
+        message: "30 minutos sin presencia: se apagaron las tomas automáticamente."
+  mode: single
+
+# ---------------------------------------------------------
+# 17) Apagar luces por luz natural suficiente
+# ---------------------------------------------------------
+- id: biblioteca_luz_natural_suficiente
+  alias: "Biblioteca - Apagar luces por luz natural suficiente"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.luminosidad_biblioteca
+      above: 500
+  condition:
+    - condition: state
+      entity_id: binary_sensor.presencia_biblioteca
+      state: "on"
+    - condition: state
+      entity_id: input_boolean.modo_automatico_biblioteca
+      state: "on"
+  action:
+    - service: light.turn_off
+      target:
+        entity_id:
+          - light.iluminacion_zona_1
+          - light.iluminacion_zona_2
+          - light.iluminacion_zona_3
+          - light.iluminacion_zona_4
+  mode: single
+
+# ---------------------------------------------------------
+# 18) Encender luces por poca luz natural
+# ---------------------------------------------------------
+- id: biblioteca_luz_natural_insuficiente
+  alias: "Biblioteca - Encender luces por poca luz natural"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.luminosidad_biblioteca
+      below: 200
+  condition:
+    - condition: state
+      entity_id: binary_sensor.presencia_biblioteca
+      state: "on"
+    - condition: state
+      entity_id: input_boolean.modo_automatico_biblioteca
+      state: "on"
+  action:
+    - service: light.turn_on
+      target:
+        entity_id:
+          - light.iluminacion_zona_1
+          - light.iluminacion_zona_2
+          - light.iluminacion_zona_3
+          - light.iluminacion_zona_4
+  mode: single
+
+# ---------------------------------------------------------
+# 19) CO2 alto: ventilar
+# ---------------------------------------------------------
+- id: biblioteca_co2_alto
+  alias: "Biblioteca - CO2 alto, ventilar"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.co2_biblioteca
+      above: 1000
+  condition:
+    - condition: state
+      entity_id: input_boolean.modo_automatico_biblioteca
+      state: "on"
+  action:
+    - service: fan.turn_on
+      target:
+        entity_id:
+          - fan.ventilador_1
+          - fan.ventilador_2
+    - service: persistent_notification.create
+      data:
+        title: "Biblioteca - Calidad de aire"
+        message: "Nivel de CO2 elevado. Se encendieron los ventiladores para ventilar."
+  mode: single
+
+# ---------------------------------------------------------
+# 20) Contador de aperturas de puerta
+# ---------------------------------------------------------
+- id: biblioteca_contador_puerta
+  alias: "Biblioteca - Contar apertura de puerta"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.puerta_principal_biblioteca
+      to: "on"
+  action:
+    - service: counter.increment
+      target:
+        entity_id: counter.aperturas_puerta_biblioteca
+  mode: single
+
+# ---------------------------------------------------------
+# 21) Contador de aperturas de ventana
+# ---------------------------------------------------------
+- id: biblioteca_contador_ventana
+  alias: "Biblioteca - Contar apertura de ventana"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ventana_biblioteca
+      to: "on"
+  action:
+    - service: counter.increment
+      target:
+        entity_id: counter.aperturas_ventana_biblioteca
+  mode: single
+  
+ 
+ 
+ 
+ 
+ # =========================================================
+# automations_lab.yaml — Laboratorio de Informática
+# =========================================================
+# Pegar estos bloques AL FINAL de tu automations.yaml existente.
+#
+# CONTROL POR MODOS: un solo selector (input_select.lab_modo_clase)
+# con 4 opciones que reflejan los 4 modos de funcionamiento:
+#   Normal / Proyección / Pizarra Interactiva / Ahorro
+# Un actuador único (lab_aplicar_modo_clase) traduce el modo
+# elegido en acciones reales — el resto de las automatizaciones
+# solo CAMBIAN el selector, nunca tocan los equipos directo.
+
+# ---------------------------------------------------------
+# 1) Presencia detectada: si estaba en "Ahorro", vuelve a Normal
+# ---------------------------------------------------------
+- id: lab_presencia_on
+  alias: "Lab - Presencia detectada"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.presencia_lab
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: input_select.lab_modo_clase
+      state: "Ahorro"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.lab_modo_clase
+      data:
+        option: "Normal"
+  mode: single
+
+# ---------------------------------------------------------
+# 2) Sin presencia (2 min): pasa a "Ahorro" automáticamente
+# ---------------------------------------------------------
+- id: lab_presencia_off
+  alias: "Lab - Sin presencia, modo Ahorro"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.presencia_lab
+      to: "off"
+      for: "00:02:00"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.lab_modo_clase
+      data:
+        option: "Ahorro"
+  mode: single
+
+# ---------------------------------------------------------
+# 3) Temperatura crítica (>29°C): protección térmica, siempre
+#    activa sin importar el modo elegido
+# ---------------------------------------------------------
+- id: lab_temp_critica
+  alias: "Lab - Temperatura crítica, programar aires a 25°C"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.temperatura_lab
+      above: 29
+  action:
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_lab_1
+          - climate.aire_lab_2
+      data:
+        hvac_mode: cool
+    - service: climate.set_temperature
+      target:
+        entity_id:
+          - climate.aire_lab_1
+          - climate.aire_lab_2
+      data:
+        temperature: 25
+  mode: single
+
+# =========================================================
+# ACTUADOR: aplica el modo elegido en el selector
+# =========================================================
+# NOTA TÉCNICA: las luces son ON/OFF puro (fluorescentes
+# convencionales, sin balasto regulable — igual limitación
+# que en la Biblioteca), por eso "intensidad reducida" se
+# implementa como ON simple en la zona trasera.
+# ---------------------------------------------------------
+- id: lab_aplicar_modo_clase
+  alias: "Lab - Aplicar modo de clase seleccionado"
+  trigger:
+    - platform: state
+      entity_id: input_select.lab_modo_clase
+  action:
+    - choose:
+        # ---------------- NORMAL ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.lab_modo_clase
+              state: "Normal"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.lab_iluminacion_zona_pizarron
+                  - light.lab_iluminacion_zona_general
+            - service: switch.turn_off
+              target:
+                entity_id:
+                  - switch.lab_proyector
+                  - switch.lab_audio
+                  - switch.lab_panel_interactivo
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_lab_1
+                  - climate.aire_lab_2
+              data:
+                hvac_mode: cool
+            - service: fan.turn_on
+              target:
+                entity_id:
+                  - fan.lab_ventilador_1
+                  - fan.lab_ventilador_2
+                  - fan.lab_ventilador_3
+                  - fan.lab_ventilador_4
+              data:
+                percentage: 33
+
+        # ---------------- PROYECCIÓN ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.lab_modo_clase
+              state: "Proyección"
+          sequence:
+            - service: light.turn_off
+              target:
+                entity_id: light.lab_iluminacion_zona_pizarron
+            - service: light.turn_on
+              target:
+                entity_id: light.lab_iluminacion_zona_general
+            - service: switch.turn_on
+              target:
+                entity_id:
+                  - switch.lab_proyector
+                  - switch.lab_audio
+            - service: switch.turn_off
+              target:
+                entity_id: switch.lab_panel_interactivo
+            - service: cover.close_cover
+              target:
+                entity_id: cover.lab_pantalla_proyeccion
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_lab_1
+                  - climate.aire_lab_2
+              data:
+                hvac_mode: cool
+            - service: fan.turn_on
+              target:
+                entity_id:
+                  - fan.lab_ventilador_1
+                  - fan.lab_ventilador_2
+                  - fan.lab_ventilador_3
+                  - fan.lab_ventilador_4
+              data:
+                percentage: 33
+
+        # ---------------- PIZARRA INTERACTIVA ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.lab_modo_clase
+              state: "Pizarra Interactiva"
+          sequence:
+            - service: light.turn_off
+              target:
+                entity_id: light.lab_iluminacion_zona_pizarron
+            - service: light.turn_on
+              target:
+                entity_id: light.lab_iluminacion_zona_general
+            - service: switch.turn_on
+              target:
+                entity_id:
+                  - switch.lab_proyector
+                  - switch.lab_audio
+                  - switch.lab_panel_interactivo
+            - service: cover.close_cover
+              target:
+                entity_id: cover.lab_pantalla_proyeccion
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_lab_1
+                  - climate.aire_lab_2
+              data:
+                hvac_mode: cool
+            - service: fan.turn_on
+              target:
+                entity_id:
+                  - fan.lab_ventilador_1
+                  - fan.lab_ventilador_2
+                  - fan.lab_ventilador_3
+                  - fan.lab_ventilador_4
+              data:
+                percentage: 33
+      default:
+        # ---------------- AHORRO (poca/ninguna ocupación) ----------------
+        - service: light.turn_off
+          target:
+            entity_id:
+              - light.lab_iluminacion_zona_pizarron
+              - light.lab_iluminacion_zona_general
+        - service: switch.turn_off
+          target:
+            entity_id:
+              - switch.lab_proyector
+              - switch.lab_audio
+              - switch.lab_panel_interactivo
+        - service: cover.open_cover
+          target:
+            entity_id: cover.lab_pantalla_proyeccion
+        - service: climate.set_hvac_mode
+          target:
+            entity_id:
+              - climate.aire_lab_1
+              - climate.aire_lab_2
+          data:
+            hvac_mode: "off"
+        - service: switch.turn_off
+          target:
+            entity_id:
+              - switch.lab_aire_1
+              - switch.lab_aire_2
+        - service: fan.turn_off
+          target:
+            entity_id:
+              - fan.lab_ventilador_1
+              - fan.lab_ventilador_2
+              - fan.lab_ventilador_3
+              - fan.lab_ventilador_4
+  mode: single
+
+# ---------------------------------------------------------
+# 5) SIMULACIÓN: sincronizar helpers de prueba con sensores virtuales
+# ---------------------------------------------------------
+- id: lab_sim_temperatura
+  alias: "Lab - Sincronizar simulación de temperatura"
+  trigger:
+    - platform: state
+      entity_id: input_number.lab_control_temperatura
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.temperatura_lab
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+- id: lab_sim_presencia
+  alias: "Lab - Sincronizar simulación de presencia"
+  trigger:
+    - platform: state
+      entity_id: input_boolean.lab_simular_presencia
+  action:
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.lab_simular_presencia
+              state: "on"
+          sequence:
+            - service: virtual.turn_on
+              target:
+                entity_id: binary_sensor.presencia_lab
+      default:
+        - service: virtual.turn_off
+          target:
+            entity_id: binary_sensor.presencia_lab
+  mode: single
+
+# =========================================================
+# EFICIENCIA ENERGÉTICA Y CONDICIONES AMBIENTALES
+# =========================================================
+
+# ---------------------------------------------------------
+# 6) CO2 alto: ventilar encendiendo los ventiladores
+# ---------------------------------------------------------
+- id: lab_co2_alto
+  alias: "Lab - CO2 alto, ventilar"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.co2_lab
+      above: 1000
+  action:
+    - service: fan.turn_on
+      target:
+        entity_id:
+          - fan.lab_ventilador_1
+          - fan.lab_ventilador_2
+          - fan.lab_ventilador_3
+          - fan.lab_ventilador_4
+    - service: persistent_notification.create
+      data:
+        title: "Lab Informática - Calidad de aire"
+        message: "Nivel de CO2 elevado. Se encendieron los ventiladores para ventilar."
+  mode: single
+
+# ---------------------------------------------------------
+# 7) Apagado automático de tomas por inactividad prolongada
+#    (30 min sin presencia), solo si el interruptor está activo
+# ---------------------------------------------------------
+- id: lab_apagado_tomas_inactividad
+  alias: "Lab - Apagar tomas por inactividad prolongada"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.presencia_lab
+      to: "off"
+      for: "00:30:00"
+  condition:
+    - condition: state
+      entity_id: input_boolean.lab_apagado_automatico_tomas
+      state: "on"
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.lab_toma_01
+          - switch.lab_toma_02
+          - switch.lab_toma_03
+          - switch.lab_toma_04
+          - switch.lab_toma_05
+          - switch.lab_toma_06
+          - switch.lab_toma_07
+          - switch.lab_toma_08
+          - switch.lab_toma_09
+          - switch.lab_toma_10
+          - switch.lab_toma_11
+          - switch.lab_toma_12
+          - switch.lab_toma_13
+          - switch.lab_toma_14
+          - switch.lab_toma_15
+          - switch.lab_toma_16
+          - switch.lab_toma_17
+    - service: persistent_notification.create
+      data:
+        title: "Lab Informática - Ahorro de energía"
+        message: "30 minutos sin presencia: se apagaron las tomas automáticamente."
+  mode: single
+
+# ---------------------------------------------------------
+# 8) Apagar luces por luz natural suficiente (con gente presente)
+# ---------------------------------------------------------
+- id: lab_luz_natural_suficiente
+  alias: "Lab - Apagar luces por luz natural suficiente"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.luminosidad_lab
+      above: 500
+  condition:
+    - condition: state
+      entity_id: binary_sensor.presencia_lab
+      state: "on"
+    - condition: state
+      entity_id: input_select.lab_modo_clase
+      state: "Normal"
+  action:
+    - service: light.turn_off
+      target:
+        entity_id:
+          - light.lab_iluminacion_zona_pizarron
+          - light.lab_iluminacion_zona_general
+  mode: single
+
+# ---------------------------------------------------------
+# 9) Encender luces por poca luz natural (con gente presente)
+# ---------------------------------------------------------
+- id: lab_luz_natural_insuficiente
+  alias: "Lab - Encender luces por poca luz natural"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.luminosidad_lab
+      below: 200
+  condition:
+    - condition: state
+      entity_id: binary_sensor.presencia_lab
+      state: "on"
+    - condition: state
+      entity_id: input_select.lab_modo_clase
+      state: "Normal"
+  action:
+    - service: light.turn_on
+      target:
+        entity_id:
+          - light.lab_iluminacion_zona_pizarron
+          - light.lab_iluminacion_zona_general
+  mode: single
+
+# ---------------------------------------------------------
+# 10) SIMULACIÓN: sincronizar CO2 y luminosidad
+# ---------------------------------------------------------
+- id: lab_sim_co2
+  alias: "Lab - Sincronizar simulación de CO2"
+  trigger:
+    - platform: state
+      entity_id: input_number.lab_control_co2
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.co2_lab
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+- id: lab_sim_luminosidad
+  alias: "Lab - Sincronizar simulación de luminosidad"
+  trigger:
+    - platform: state
+      entity_id: input_number.lab_control_luminosidad
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.luminosidad_lab
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+  
+  
+  # =========================================================
+# =========================================================
+# automations_multiusos.yaml — Salón Multiusos
+# =========================================================
+# Pegar al final de tu automations.yaml existente.
+#
+# CONTROL POR MODOS: input_select.multiusos_modo_salon con
+# 6 opciones (Reunión, Conferencia, Proyección, Evento,
+# Ventilación, Ahorro). Un actuador único traduce el modo en
+# acciones reales — el resto de las automatizaciones solo
+# CAMBIAN el selector.
+
+# ---------------------------------------------------------
+# 1) Presencia detectada: si estaba en "Ahorro", vuelve a "Reunión"
+# ---------------------------------------------------------
+- id: multiusos_presencia_on
+  alias: "Multiusos - Presencia detectada"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.presencia_multiusos
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: input_select.multiusos_modo_salon
+      state: "Ahorro"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.multiusos_modo_salon
+      data:
+        option: "Reunión"
+  mode: single
+
+# ---------------------------------------------------------
+# 2) Sin presencia (2 min): pasa a "Ahorro" automáticamente
+# ---------------------------------------------------------
+- id: multiusos_presencia_off
+  alias: "Multiusos - Sin presencia, modo Ahorro"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.presencia_multiusos
+      to: "off"
+      for: "00:02:00"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.multiusos_modo_salon
+      data:
+        option: "Ahorro"
+  mode: single
+
+# ---------------------------------------------------------
+# 3) Temperatura crítica (>29°C): protección térmica, siempre activa
+# ---------------------------------------------------------
+- id: multiusos_temp_critica
+  alias: "Multiusos - Temperatura crítica, programar aires a 25°C"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.temperatura_multiusos
+      above: 29
+  action:
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_multiusos_1
+          - climate.aire_multiusos_2
+          - climate.aire_multiusos_3
+      data:
+        hvac_mode: cool
+    - service: climate.set_temperature
+      target:
+        entity_id:
+          - climate.aire_multiusos_1
+          - climate.aire_multiusos_2
+          - climate.aire_multiusos_3
+      data:
+        temperature: 25
+  mode: single
+
+# ---------------------------------------------------------
+# 4) CO2 alto: ventilar
+# ---------------------------------------------------------
+- id: multiusos_co2_alto
+  alias: "Multiusos - CO2 alto, ventilar"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.co2_multiusos
+      above: 1000
+  action:
+    - service: fan.turn_on
+      target:
+        entity_id:
+          - fan.multiusos_ventilador_1
+          - fan.multiusos_ventilador_2
+          - fan.multiusos_ventilador_3
+          - fan.multiusos_ventilador_4
+    - service: persistent_notification.create
+      data:
+        title: "Multiusos - Calidad de aire"
+        message: "Nivel de CO2 elevado. Se encendieron los ventiladores para ventilar."
+  mode: single
+
+# =========================================================
+# ACTUADOR: aplica el modo elegido en el selector
+# =========================================================
+- id: multiusos_aplicar_modo
+  alias: "Multiusos - Aplicar modo de salón seleccionado"
+  trigger:
+    - platform: state
+      entity_id: input_select.multiusos_modo_salon
+  action:
+    - choose:
+        # ---------------- REUNIÓN ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.multiusos_modo_salon
+              state: "Reunión"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.multiusos_iluminacion_zona_1
+                  - light.multiusos_iluminacion_zona_2
+                  - light.multiusos_iluminacion_zona_3
+                  - light.multiusos_iluminacion_zona_4
+            - service: switch.turn_off
+              target:
+                entity_id:
+                  - switch.multiusos_proyector
+                  - switch.multiusos_audio
+                  - switch.multiusos_microfonos
+            - service: cover.open_cover
+              target:
+                entity_id: cover.multiusos_pantalla_proyeccion
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_multiusos_1
+                  - climate.aire_multiusos_2
+                  - climate.aire_multiusos_3
+              data:
+                hvac_mode: cool
+            - service: fan.turn_on
+              target:
+                entity_id:
+                  - fan.multiusos_ventilador_1
+                  - fan.multiusos_ventilador_2
+                  - fan.multiusos_ventilador_3
+                  - fan.multiusos_ventilador_4
+              data:
+                percentage: 33
+
+        # ---------------- CONFERENCIA ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.multiusos_modo_salon
+              state: "Conferencia"
+          sequence:
+            - service: light.turn_off
+              target:
+                entity_id:
+                  - light.multiusos_iluminacion_zona_1
+                  - light.multiusos_iluminacion_zona_2
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.multiusos_iluminacion_zona_3
+                  - light.multiusos_iluminacion_zona_4
+            - service: switch.turn_on
+              target:
+                entity_id:
+                  - switch.multiusos_proyector
+                  - switch.multiusos_audio
+                  - switch.multiusos_microfonos
+            - service: cover.close_cover
+              target:
+                entity_id: cover.multiusos_pantalla_proyeccion
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_multiusos_1
+                  - climate.aire_multiusos_2
+                  - climate.aire_multiusos_3
+              data:
+                hvac_mode: cool
+            - service: fan.turn_on
+              target:
+                entity_id:
+                  - fan.multiusos_ventilador_1
+                  - fan.multiusos_ventilador_2
+                  - fan.multiusos_ventilador_3
+                  - fan.multiusos_ventilador_4
+              data:
+                percentage: 33
+
+        # ---------------- PROYECCIÓN ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.multiusos_modo_salon
+              state: "Proyección"
+          sequence:
+            - service: light.turn_off
+              target:
+                entity_id:
+                  - light.multiusos_iluminacion_zona_1
+                  - light.multiusos_iluminacion_zona_2
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.multiusos_iluminacion_zona_3
+                  - light.multiusos_iluminacion_zona_4
+            - service: switch.turn_on
+              target:
+                entity_id:
+                  - switch.multiusos_proyector
+                  - switch.multiusos_audio
+            - service: switch.turn_off
+              target:
+                entity_id: switch.multiusos_microfonos
+            - service: cover.close_cover
+              target:
+                entity_id: cover.multiusos_pantalla_proyeccion
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_multiusos_1
+                  - climate.aire_multiusos_2
+                  - climate.aire_multiusos_3
+              data:
+                hvac_mode: cool
+            - service: fan.turn_on
+              target:
+                entity_id:
+                  - fan.multiusos_ventilador_1
+                  - fan.multiusos_ventilador_2
+                  - fan.multiusos_ventilador_3
+                  - fan.multiusos_ventilador_4
+              data:
+                percentage: 33
+
+        # ---------------- EVENTO ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.multiusos_modo_salon
+              state: "Evento"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.multiusos_iluminacion_zona_1
+                  - light.multiusos_iluminacion_zona_2
+                  - light.multiusos_iluminacion_zona_3
+                  - light.multiusos_iluminacion_zona_4
+            - service: switch.turn_on
+              target:
+                entity_id:
+                  - switch.multiusos_audio
+                  - switch.multiusos_microfonos
+            - service: switch.turn_off
+              target:
+                entity_id: switch.multiusos_proyector
+            - service: cover.open_cover
+              target:
+                entity_id: cover.multiusos_pantalla_proyeccion
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_multiusos_1
+                  - climate.aire_multiusos_2
+                  - climate.aire_multiusos_3
+              data:
+                hvac_mode: cool
+            - service: fan.turn_on
+              target:
+                entity_id:
+                  - fan.multiusos_ventilador_1
+                  - fan.multiusos_ventilador_2
+                  - fan.multiusos_ventilador_3
+                  - fan.multiusos_ventilador_4
+              data:
+                percentage: 66
+
+        # ---------------- VENTILACIÓN (pre-acondicionar, sin evento) ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.multiusos_modo_salon
+              state: "Ventilación"
+          sequence:
+            - service: light.turn_off
+              target:
+                entity_id:
+                  - light.multiusos_iluminacion_zona_1
+                  - light.multiusos_iluminacion_zona_2
+                  - light.multiusos_iluminacion_zona_3
+                  - light.multiusos_iluminacion_zona_4
+            - service: switch.turn_off
+              target:
+                entity_id:
+                  - switch.multiusos_proyector
+                  - switch.multiusos_audio
+                  - switch.multiusos_microfonos
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_multiusos_1
+                  - climate.aire_multiusos_2
+                  - climate.aire_multiusos_3
+              data:
+                hvac_mode: cool
+            - service: fan.turn_on
+              target:
+                entity_id:
+                  - fan.multiusos_ventilador_1
+                  - fan.multiusos_ventilador_2
+                  - fan.multiusos_ventilador_3
+                  - fan.multiusos_ventilador_4
+              data:
+                percentage: 100
+
+        # ---------------- EMERGENCIA ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.multiusos_modo_salon
+              state: "Emergencia"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.multiusos_iluminacion_zona_1
+                  - light.multiusos_iluminacion_zona_2
+                  - light.multiusos_iluminacion_zona_3
+                  - light.multiusos_iluminacion_zona_4
+            - service: switch.turn_off
+              target:
+                entity_id:
+                  - switch.multiusos_proyector
+                  - switch.multiusos_audio
+                  - switch.multiusos_microfonos
+            - service: cover.open_cover
+              target:
+                entity_id: cover.multiusos_pantalla_proyeccion
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_multiusos_1
+                  - climate.aire_multiusos_2
+                  - climate.aire_multiusos_3
+              data:
+                hvac_mode: "off"
+            - service: fan.turn_off
+              target:
+                entity_id:
+                  - fan.multiusos_ventilador_1
+                  - fan.multiusos_ventilador_2
+                  - fan.multiusos_ventilador_3
+                  - fan.multiusos_ventilador_4
+      default:
+        # ---------------- AHORRO ----------------
+        - service: light.turn_off
+          target:
+            entity_id:
+              - light.multiusos_iluminacion_zona_1
+              - light.multiusos_iluminacion_zona_2
+              - light.multiusos_iluminacion_zona_3
+              - light.multiusos_iluminacion_zona_4
+        - service: switch.turn_off
+          target:
+            entity_id:
+              - switch.multiusos_proyector
+              - switch.multiusos_audio
+              - switch.multiusos_microfonos
+        - service: cover.open_cover
+          target:
+            entity_id: cover.multiusos_pantalla_proyeccion
+        - service: climate.set_hvac_mode
+          target:
+            entity_id:
+              - climate.aire_multiusos_1
+              - climate.aire_multiusos_2
+              - climate.aire_multiusos_3
+          data:
+            hvac_mode: "off"
+        - service: switch.turn_off
+          target:
+            entity_id:
+              - switch.multiusos_aire_1
+              - switch.multiusos_aire_2
+              - switch.multiusos_aire_3
+        - service: fan.turn_off
+          target:
+            entity_id:
+              - fan.multiusos_ventilador_1
+              - fan.multiusos_ventilador_2
+              - fan.multiusos_ventilador_3
+              - fan.multiusos_ventilador_4
+  mode: single
+
+# ---------------------------------------------------------
+# 5) SIMULACIÓN: sincronizar helpers de prueba
+# ---------------------------------------------------------
+- id: multiusos_sim_temperatura
+  alias: "Multiusos - Sincronizar simulación de temperatura"
+  trigger:
+    - platform: state
+      entity_id: input_number.multiusos_control_temperatura
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.temperatura_multiusos
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+- id: multiusos_sim_co2
+  alias: "Multiusos - Sincronizar simulación de CO2"
+  trigger:
+    - platform: state
+      entity_id: input_number.multiusos_control_co2
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.co2_multiusos
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+- id: multiusos_sim_presencia
+  alias: "Multiusos - Sincronizar simulación de presencia"
+  trigger:
+    - platform: state
+      entity_id: input_boolean.multiusos_simular_presencia
+  action:
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.multiusos_simular_presencia
+              state: "on"
+          sequence:
+            - service: virtual.turn_on
+              target:
+                entity_id: binary_sensor.presencia_multiusos
+      default:
+        - service: virtual.turn_off
+          target:
+            entity_id: binary_sensor.presencia_multiusos
+  mode: single
+
+# =========================================================
+# SEGURIDAD Y EFICIENCIA ADICIONALES
+# =========================================================
+
+# ---------------------------------------------------------
+# 6) Humo detectado: pasa a modo "Emergencia" (siempre activo,
+#    sin importar el modo actual ni el interruptor general)
+# ---------------------------------------------------------
+- id: multiusos_humo_detectado
+  alias: "Multiusos - 🔥 Humo detectado"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.humo_multiusos
+      to: "on"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.multiusos_modo_salon
+      data:
+        option: "Emergencia"
+    - service: persistent_notification.create
+      data:
+        title: "🔥 ALERTA - Humo detectado en el Salón Multiusos"
+        message: "Se activó el modo Emergencia: luces encendidas, aires y ventiladores apagados, sistema audiovisual apagado."
+  mode: single
+
+# ---------------------------------------------------------
+# 7) Consumo eléctrico elevado (capacidad instalada: 12.500W)
+# ---------------------------------------------------------
+- id: multiusos_consumo_alto
+  alias: "Multiusos - ⚡ Consumo eléctrico elevado"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.consumo_total_multiusos
+      above: 10500
+      for: "00:05:00"
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "⚡ Consumo elevado"
+        message: "El consumo del Salón Multiusos superó los 10.500W durante 5 minutos seguidos (cerca de la capacidad máxima). Revisar equipos."
+  mode: single
+
+# ---------------------------------------------------------
+# 8) Apagado automático de tomas por inactividad (30 min)
+# ---------------------------------------------------------
+- id: multiusos_apagado_tomas_inactividad
+  alias: "Multiusos - Apagar tomas por inactividad prolongada"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.presencia_multiusos
+      to: "off"
+      for: "00:30:00"
+  condition:
+    - condition: state
+      entity_id: input_boolean.multiusos_apagado_automatico_tomas
+      state: "on"
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.multiusos_toma_01
+          - switch.multiusos_toma_02
+          - switch.multiusos_toma_03
+          - switch.multiusos_toma_04
+          - switch.multiusos_toma_05
+          - switch.multiusos_toma_06
+          - switch.multiusos_toma_07
+          - switch.multiusos_toma_08
+    - service: persistent_notification.create
+      data:
+        title: "Multiusos - Ahorro de energía"
+        message: "30 minutos sin presencia: se apagaron las tomas automáticamente."
+  mode: single
+
+# ---------------------------------------------------------
+# 9) Luces por luz natural — solo en modo "Reunión"
+# ---------------------------------------------------------
+- id: multiusos_luz_natural_suficiente
+  alias: "Multiusos - Apagar luces por luz natural suficiente"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.luminosidad_multiusos
+      above: 500
+  condition:
+    - condition: state
+      entity_id: binary_sensor.presencia_multiusos
+      state: "on"
+    - condition: state
+      entity_id: input_select.multiusos_modo_salon
+      state: "Reunión"
+  action:
+    - service: light.turn_off
+      target:
+        entity_id:
+          - light.multiusos_iluminacion_zona_1
+          - light.multiusos_iluminacion_zona_2
+          - light.multiusos_iluminacion_zona_3
+          - light.multiusos_iluminacion_zona_4
+  mode: single
+
+- id: multiusos_luz_natural_insuficiente
+  alias: "Multiusos - Encender luces por poca luz natural"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.luminosidad_multiusos
+      below: 200
+  condition:
+    - condition: state
+      entity_id: binary_sensor.presencia_multiusos
+      state: "on"
+    - condition: state
+      entity_id: input_select.multiusos_modo_salon
+      state: "Reunión"
+  action:
+    - service: light.turn_on
+      target:
+        entity_id:
+          - light.multiusos_iluminacion_zona_1
+          - light.multiusos_iluminacion_zona_2
+          - light.multiusos_iluminacion_zona_3
+          - light.multiusos_iluminacion_zona_4
+  mode: single
+
+# ---------------------------------------------------------
+# 10) SIMULACIÓN: sincronizar humo y luminosidad
+# ---------------------------------------------------------
+- id: multiusos_sim_humo
+  alias: "Multiusos - Sincronizar simulación de humo"
+  trigger:
+    - platform: state
+      entity_id: input_boolean.multiusos_simular_humo
+  action:
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.multiusos_simular_humo
+              state: "on"
+          sequence:
+            - service: virtual.turn_on
+              target:
+                entity_id: binary_sensor.humo_multiusos
+      default:
+        - service: virtual.turn_off
+          target:
+            entity_id: binary_sensor.humo_multiusos
+  mode: single
+
+- id: multiusos_sim_luminosidad
+  alias: "Multiusos - Sincronizar simulación de luminosidad"
+  trigger:
+    - platform: state
+      entity_id: input_number.multiusos_control_luminosidad
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.luminosidad_multiusos
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+  
+  
+  # =========================================================
+# =========================================================
+# automations_administrativa.yaml — Área Administrativa
+# =========================================================
+# Pegar al final de tu automations.yaml existente.
+
+# =========================================================
+# PROTECCIÓN ELÉCTRICA — SIEMPRE ACTIVA, EN CUALQUIER MODO
+# =========================================================
+# Cada BASIC-1GSP protege su propia zona de forma independiente.
+# Si AMBAS zonas muestran corriente elevada AL MISMO TIEMPO, se
+# interpreta como una falla en la acometida general (no en un
+# circuito puntual) y se cortan las dos juntas. Ningún corte se
+# restablece solo — requiere reposición manual del switch
+# correspondiente.
+
+# ---------------------------------------------------------
+# Zona Área Administrativa: tensión fuera de rango
+# ---------------------------------------------------------
+- id: administrativa_proteccion_aa_tension
+  alias: "Administrativa - ⚠️ Zona AA: tensión anormal"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.voltaje_aa
+      below: 200
+    - platform: numeric_state
+      entity_id: sensor.voltaje_aa
+      above: 240
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.corte_aa_administrativa
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.administrativa_aire_aa_1
+          - switch.administrativa_aire_aa_2
+          - switch.administrativa_toma_aa_01
+          - switch.administrativa_toma_aa_02
+          - switch.administrativa_toma_aa_03
+          - switch.administrativa_toma_aa_04
+    - service: fan.turn_off
+      target:
+        entity_id:
+          - fan.administrativa_ventilador_aa_1
+          - fan.administrativa_ventilador_aa_2
+    - service: persistent_notification.create
+      data:
+        title: "⚠️ Área Administrativa - Tensión anormal"
+        message: "Corte de la zona Área Administrativa activado (BASIC-1GSP AA). Revisar antes de reponer manualmente switch.corte_aa_administrativa."
+  mode: single
+
+# ---------------------------------------------------------
+# Zona Área Administrativa: sobrecorriente propia
+# ---------------------------------------------------------
+- id: administrativa_proteccion_aa_corriente
+  alias: "Administrativa - ⚠️ Zona AA: sobrecorriente"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.corriente_aa
+      above: 28
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.corte_aa_administrativa
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.administrativa_aire_aa_1
+          - switch.administrativa_aire_aa_2
+          - switch.administrativa_toma_aa_01
+          - switch.administrativa_toma_aa_02
+          - switch.administrativa_toma_aa_03
+          - switch.administrativa_toma_aa_04
+    - service: fan.turn_off
+      target:
+        entity_id:
+          - fan.administrativa_ventilador_aa_1
+          - fan.administrativa_ventilador_aa_2
+    - service: persistent_notification.create
+      data:
+        title: "⚠️ Área Administrativa - Sobrecorriente"
+        message: "Corriente de la zona AA por encima de 28A (límite del BASIC-1GSP: 32A). Corte activado. Revisar antes de reponer manualmente."
+  mode: single
+
+# ---------------------------------------------------------
+# Zona Oficina del Director: tensión fuera de rango
+# ---------------------------------------------------------
+- id: administrativa_proteccion_od_tension
+  alias: "Administrativa - ⚠️ Zona OD: tensión anormal"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.voltaje_od
+      below: 200
+    - platform: numeric_state
+      entity_id: sensor.voltaje_od
+      above: 240
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.corte_od_administrativa
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.administrativa_aire_od_1
+          - switch.administrativa_toma_od_01
+          - switch.administrativa_toma_od_02
+          - switch.administrativa_toma_od_03
+    - service: fan.turn_off
+      target:
+        entity_id: fan.administrativa_ventilador_od_1
+    - service: persistent_notification.create
+      data:
+        title: "⚠️ Oficina del Director - Tensión anormal"
+        message: "Corte de la zona Oficina del Director activado (BASIC-1GSP OD). Revisar antes de reponer manualmente switch.corte_od_administrativa."
+  mode: single
+
+# ---------------------------------------------------------
+# Zona Oficina del Director: sobrecorriente propia
+# ---------------------------------------------------------
+- id: administrativa_proteccion_od_corriente
+  alias: "Administrativa - ⚠️ Zona OD: sobrecorriente"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.corriente_od
+      above: 28
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.corte_od_administrativa
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.administrativa_aire_od_1
+          - switch.administrativa_toma_od_01
+          - switch.administrativa_toma_od_02
+          - switch.administrativa_toma_od_03
+    - service: fan.turn_off
+      target:
+        entity_id: fan.administrativa_ventilador_od_1
+    - service: persistent_notification.create
+      data:
+        title: "⚠️ Oficina del Director - Sobrecorriente"
+        message: "Corriente de la zona OD por encima de 28A. Corte activado. Revisar antes de reponer manualmente."
+  mode: single
+
+# ---------------------------------------------------------
+# FALLA GENERAL: ambas zonas con corriente elevada a la vez
+# -> se interpreta como problema en la acometida general,
+# se cortan las 2 zonas juntas
+# ---------------------------------------------------------
+- id: administrativa_proteccion_general
+  alias: "Administrativa - 🔴 Falla general (ambas zonas), corte total"
+  trigger:
+    - platform: template
+      value_template: >
+        {{ states('sensor.corriente_aa')|float(0) > 20
+           and states('sensor.corriente_od')|float(0) > 20 }}
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id:
+          - switch.corte_aa_administrativa
+          - switch.corte_od_administrativa
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.administrativa_aire_aa_1
+          - switch.administrativa_aire_aa_2
+          - switch.administrativa_aire_od_1
+          - switch.administrativa_toma_aa_01
+          - switch.administrativa_toma_aa_02
+          - switch.administrativa_toma_aa_03
+          - switch.administrativa_toma_aa_04
+          - switch.administrativa_toma_od_01
+          - switch.administrativa_toma_od_02
+          - switch.administrativa_toma_od_03
+    - service: fan.turn_off
+      target:
+        entity_id:
+          - fan.administrativa_ventilador_aa_1
+          - fan.administrativa_ventilador_aa_2
+          - fan.administrativa_ventilador_od_1
+    - service: persistent_notification.create
+      data:
+        title: "🔴 ALERTA GENERAL - Falla en la acometida"
+        message: "Ambas zonas (AA y OD) muestran corriente elevada simultáneamente: posible falla en la acometida general del Área Administrativa. Corte total activado. Requiere revisión antes de reponer ambos switches manualmente."
+  mode: single
+
+# =========================================================
+# MODOS DE OPERACIÓN
+# =========================================================
+
+# ---------------------------------------------------------
+# Presencia (cualquiera de las 2 zonas): si estaba en "Ahorro",
+# vuelve a "Trabajo"
+# ---------------------------------------------------------
+- id: administrativa_presencia_on
+  alias: "Administrativa - Presencia detectada"
+  trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.presencia_aa
+        - binary_sensor.presencia_od
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: input_select.administrativa_modo
+      state: "Ahorro"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.administrativa_modo
+      data:
+        option: "Trabajo"
+  mode: single
+
+# ---------------------------------------------------------
+# Sin presencia en NINGUNA zona (2 min): pasa a "Ahorro"
+# ---------------------------------------------------------
+- id: administrativa_presencia_off
+  alias: "Administrativa - Sin presencia, modo Ahorro"
+  trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.presencia_aa
+        - binary_sensor.presencia_od
+      to: "off"
+      for: "00:02:00"
+  condition:
+    - condition: state
+      entity_id: binary_sensor.presencia_aa
+      state: "off"
+    - condition: state
+      entity_id: binary_sensor.presencia_od
+      state: "off"
+    - condition: not
+      conditions:
+        - condition: state
+          entity_id: input_select.administrativa_modo
+          state: "Fuera de horario"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.administrativa_modo
+      data:
+        option: "Ahorro"
+  mode: single
+
+# ---------------------------------------------------------
+# Horario institucional: fuerza "Fuera de horario" al cerrar
+# ---------------------------------------------------------
+- id: administrativa_fuera_horario
+  alias: "Administrativa - Cierre, Fuera de horario"
+  trigger:
+    - platform: state
+      entity_id: schedule.horario_administrativa
+      to: "off"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.administrativa_modo
+      data:
+        option: "Fuera de horario"
+  mode: single
+
+# ---------------------------------------------------------
+# Temperatura crítica (>29°C), en cualquiera de las 2 zonas
+# ---------------------------------------------------------
+- id: administrativa_temp_critica_aa
+  alias: "Administrativa - Temp. crítica AA, programar a 25°C"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.temperatura_aa
+      above: 29
+  action:
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_administrativa_aa_1
+          - climate.aire_administrativa_aa_2
+      data:
+        hvac_mode: cool
+    - service: climate.set_temperature
+      target:
+        entity_id:
+          - climate.aire_administrativa_aa_1
+          - climate.aire_administrativa_aa_2
+      data:
+        temperature: 25
+  mode: single
+
+- id: administrativa_temp_critica_od
+  alias: "Administrativa - Temp. crítica OD, programar a 25°C"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.temperatura_od
+      above: 29
+  action:
+    - service: climate.set_hvac_mode
+      target:
+        entity_id: climate.aire_administrativa_od_1
+      data:
+        hvac_mode: cool
+    - service: climate.set_temperature
+      target:
+        entity_id: climate.aire_administrativa_od_1
+      data:
+        temperature: 25
+  mode: single
+
+# =========================================================
+# ACTUADOR: aplica el modo elegido (no actúa si hay un corte
+# general activo, hasta que se resuelva la falla)
+# =========================================================
+- id: administrativa_aplicar_modo
+  alias: "Administrativa - Aplicar modo seleccionado"
+  trigger:
+    - platform: state
+      entity_id: input_select.administrativa_modo
+  condition:
+    - condition: state
+      entity_id: switch.corte_aa_administrativa
+      state: "off"
+    - condition: state
+      entity_id: switch.corte_od_administrativa
+      state: "off"
+  action:
+    - choose:
+        # ---------------- TRABAJO ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.administrativa_modo
+              state: "Trabajo"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.administrativa_iluminacion_zona_area
+                  - light.administrativa_iluminacion_zona_oficina
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_administrativa_aa_1
+                  - climate.aire_administrativa_aa_2
+                  - climate.aire_administrativa_od_1
+              data:
+                hvac_mode: cool
+            - service: fan.turn_on
+              target:
+                entity_id:
+                  - fan.administrativa_ventilador_aa_1
+                  - fan.administrativa_ventilador_aa_2
+                  - fan.administrativa_ventilador_od_1
+              data:
+                percentage: 33
+
+        # ---------------- REUNIÓN ----------------
+        - conditions:
+            - condition: state
+              entity_id: input_select.administrativa_modo
+              state: "Reunión"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.administrativa_iluminacion_zona_area
+                  - light.administrativa_iluminacion_zona_oficina
+            - service: climate.set_hvac_mode
+              target:
+                entity_id:
+                  - climate.aire_administrativa_aa_1
+                  - climate.aire_administrativa_aa_2
+                  - climate.aire_administrativa_od_1
+              data:
+                hvac_mode: cool
+            - service: climate.set_temperature
+              target:
+                entity_id:
+                  - climate.aire_administrativa_aa_1
+                  - climate.aire_administrativa_aa_2
+                  - climate.aire_administrativa_od_1
+              data:
+                temperature: 23
+            - service: fan.turn_on
+              target:
+                entity_id:
+                  - fan.administrativa_ventilador_aa_1
+                  - fan.administrativa_ventilador_aa_2
+                  - fan.administrativa_ventilador_od_1
+              data:
+                percentage: 20
+      default:
+        # ---------------- AHORRO / FUERA DE HORARIO ----------------
+        - service: light.turn_off
+          target:
+            entity_id:
+              - light.administrativa_iluminacion_zona_area
+              - light.administrativa_iluminacion_zona_oficina
+        - service: climate.set_hvac_mode
+          target:
+            entity_id:
+              - climate.aire_administrativa_aa_1
+              - climate.aire_administrativa_aa_2
+              - climate.aire_administrativa_od_1
+          data:
+            hvac_mode: "off"
+        - service: switch.turn_off
+          target:
+            entity_id:
+              - switch.administrativa_aire_aa_1
+              - switch.administrativa_aire_aa_2
+              - switch.administrativa_aire_od_1
+        - service: fan.turn_off
+          target:
+            entity_id:
+              - fan.administrativa_ventilador_aa_1
+              - fan.administrativa_ventilador_aa_2
+              - fan.administrativa_ventilador_od_1
+  mode: single
+
+# =========================================================
+# SIMULACIÓN
+# =========================================================
+- id: administrativa_sim_temperatura_aa
+  alias: "Administrativa - Sincronizar simulación temp. AA"
+  trigger:
+    - platform: state
+      entity_id: input_number.administrativa_control_temperatura_aa
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.temperatura_aa
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+- id: administrativa_sim_temperatura_od
+  alias: "Administrativa - Sincronizar simulación temp. OD"
+  trigger:
+    - platform: state
+      entity_id: input_number.administrativa_control_temperatura_od
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.temperatura_od
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+- id: administrativa_sim_voltaje_aa
+  alias: "Administrativa - Sincronizar simulación de voltaje AA"
+  trigger:
+    - platform: state
+      entity_id: input_number.administrativa_control_voltaje_aa
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.voltaje_aa
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+- id: administrativa_sim_corriente_aa
+  alias: "Administrativa - Sincronizar simulación de corriente AA"
+  trigger:
+    - platform: state
+      entity_id: input_number.administrativa_control_corriente_aa
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.corriente_aa
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+- id: administrativa_sim_voltaje_od
+  alias: "Administrativa - Sincronizar simulación de voltaje OD"
+  trigger:
+    - platform: state
+      entity_id: input_number.administrativa_control_voltaje_od
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.voltaje_od
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+- id: administrativa_sim_corriente_od
+  alias: "Administrativa - Sincronizar simulación de corriente OD"
+  trigger:
+    - platform: state
+      entity_id: input_number.administrativa_control_corriente_od
+  action:
+    - service: virtual.set
+      target:
+        entity_id: sensor.corriente_od
+      data:
+        value: "{{ trigger.to_state.state }}"
+  mode: single
+
+- id: administrativa_sim_presencia_aa
+  alias: "Administrativa - Sincronizar simulación presencia AA"
+  trigger:
+    - platform: state
+      entity_id: input_boolean.administrativa_simular_presencia_aa
+  action:
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.administrativa_simular_presencia_aa
+              state: "on"
+          sequence:
+            - service: virtual.turn_on
+              target:
+                entity_id: binary_sensor.presencia_aa
+      default:
+        - service: virtual.turn_off
+          target:
+            entity_id: binary_sensor.presencia_aa
+  mode: single
+
+- id: administrativa_sim_presencia_od
+  alias: "Administrativa - Sincronizar simulación presencia OD"
+  trigger:
+    - platform: state
+      entity_id: input_boolean.administrativa_simular_presencia_od
+  action:
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.administrativa_simular_presencia_od
+              state: "on"
+          sequence:
+            - service: virtual.turn_on
+              target:
+                entity_id: binary_sensor.presencia_od
+      default:
+        - service: virtual.turn_off
+          target:
+            entity_id: binary_sensor.presencia_od
+  mode: single

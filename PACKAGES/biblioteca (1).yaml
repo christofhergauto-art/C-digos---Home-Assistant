@@ -1,0 +1,269 @@
+# =========================================================
+# PACKAGE: biblioteca.yaml
+# =========================================================
+# UBICACIÓN: /config/packages/biblioteca.yaml
+#
+# Contiene:
+# - Los 3 termostatos reales (generic_thermostat), uno por aire
+#   (según tablero de cargas real: circuitos C-4, C-5, C-6)
+# - Los sensores de consumo energético (calculados automáticamente
+#   según qué esté encendido, con las potencias REALES del
+#   tablero de cargas eléctricas del proyecto)
+# =========================================================
+
+climate:
+  - platform: generic_thermostat
+    name: Aire Biblioteca 1
+    heater: switch.aire_1
+    target_sensor: sensor.temperatura_biblioteca
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+  - platform: generic_thermostat
+    name: Aire Biblioteca 2
+    heater: switch.aire_2
+    target_sensor: sensor.temperatura_biblioteca
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+  - platform: generic_thermostat
+    name: Aire Biblioteca 3
+    heater: switch.aire_3
+    target_sensor: sensor.temperatura_biblioteca
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+sensor:
+  # ---------------- HORAS DE USO (hoy) ----------------
+  # Miden cuánto tiempo estuvo encendido cada equipo desde
+  # las 00:00 hasta ahora. Útil para medir impacto de las
+  # automatizaciones (ej: comparar horas de uso del aire
+  # antes y después de activar el sistema automático).
+  - platform: history_stats
+    name: "Horas Aire 1 (hoy)"
+    entity_id: switch.aire_1
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Aire 2 (hoy)"
+    entity_id: switch.aire_2
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Aire 3 (hoy)"
+    entity_id: switch.aire_3
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Ventilador 1 (hoy)"
+    entity_id: fan.ventilador_1
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Ventilador 2 (hoy)"
+    entity_id: fan.ventilador_2
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Deshumidificador (hoy)"
+    entity_id: switch.deshumidificador_biblioteca
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Luces Zona 1 (hoy)"
+    entity_id: light.zona_1
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Luces Zona 2 (hoy)"
+    entity_id: light.zona_2
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Luces Zona 3 (hoy)"
+    entity_id: light.zona_3
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Luces Zona 4 (hoy)"
+    entity_id: light.zona_4
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Horas Presencia (hoy)"
+    entity_id: binary_sensor.presencia_biblioteca
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  # ---------------- ENERGÍA ACUMULADA (optimización energética) ----------------
+  # NOTA: el sensor de energía acumulada (kWh) y los medidores diario/mensual
+  # se crean como AYUDANTES desde la interfaz (Ajustes > Ayudantes), no acá.
+  # Ver instrucciones en el chat.
+
+template:
+  - sensor:
+      # ---------------- POTENCIA POR TOMACORRIENTE ----------------
+      # Simula que cada toma prendida consume entre 40 y 150 W
+      # (variable al azar por toma, como equipos reales distintos)
+      - name: "Consumo Toma 01"
+        unique_id: consumo_toma_01
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {{ 100 if is_state('switch.toma_01', 'on') else 0 }}
+      - name: "Consumo Toma 02"
+        unique_id: consumo_toma_02
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {{ 100 if is_state('switch.toma_02', 'on') else 0 }}
+      - name: "Consumo Toma 03"
+        unique_id: consumo_toma_03
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {{ 100 if is_state('switch.toma_03', 'on') else 0 }}
+      - name: "Consumo Toma 04"
+        unique_id: consumo_toma_04
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {{ 100 if is_state('switch.toma_04', 'on') else 0 }}
+      - name: "Consumo Toma 05"
+        unique_id: consumo_toma_05
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {{ 100 if is_state('switch.toma_05', 'on') else 0 }}
+      - name: "Consumo Toma 06"
+        unique_id: consumo_toma_06
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {{ 100 if is_state('switch.toma_06', 'on') else 0 }}
+      - name: "Consumo Toma 07"
+        unique_id: consumo_toma_07
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {{ 100 if is_state('switch.toma_07', 'on') else 0 }}
+      - name: "Consumo Toma 08"
+        unique_id: consumo_toma_08
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {{ 100 if is_state('switch.toma_08', 'on') else 0 }}
+
+      # ---------------- POTENCIA TOTAL (tablero de cargas real) ----------------
+      # Según tablero de cargas de la Biblioteca:
+      # C-1 Iluminación: 32 tubos x 40W = 1.280W -> 320W por zona (4 zonas)
+      # C-2 Tomas: 8 x 100W = 800W
+      # C-3 Ventiladores: 2 x 150W = 300W
+      # C-4/C-5/C-6 Aires: 3 x 2.500W (24.000 BTU c/u) = 7.500W
+      # Deshumidificador: 650W (no está en el tablero original, valor de referencia)
+      - name: "Consumo Total Biblioteca"
+        unique_id: consumo_total_biblioteca
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set luces = (320 if is_state('light.zona_1','on') else 0)
+                        + (320 if is_state('light.zona_2','on') else 0)
+                        + (320 if is_state('light.zona_3','on') else 0)
+                        + (320 if is_state('light.zona_4','on') else 0) %}
+          {% set aires = (2500 if is_state('switch.aire_1','on') else 0)
+                        + (2500 if is_state('switch.aire_2','on') else 0)
+                        + (2500 if is_state('switch.aire_3','on') else 0) %}
+          {% set ventiladores = (150 if is_state('fan.ventilador_1','on') else 0)
+                               + (150 if is_state('fan.ventilador_2','on') else 0) %}
+          {% set deshumidificador = 650 if is_state('switch.deshumidificador_biblioteca','on') else 0 %}
+          {% set tomas = states('sensor.consumo_toma_01')|float(0)
+                       + states('sensor.consumo_toma_02')|float(0)
+                       + states('sensor.consumo_toma_03')|float(0)
+                       + states('sensor.consumo_toma_04')|float(0)
+                       + states('sensor.consumo_toma_05')|float(0)
+                       + states('sensor.consumo_toma_06')|float(0)
+                       + states('sensor.consumo_toma_07')|float(0)
+                       + states('sensor.consumo_toma_08')|float(0) %}
+          {{ luces + aires + ventiladores + deshumidificador + tomas }}
+
+
+      # ---------------- CONFORT AMBIENTAL (mejora de condiciones) ----------------
+      # Resume en una sola palabra si el ambiente está dentro del rango
+      # ideal para personas y para la conservación de la colección
+      # (la humedad fuera de rango daña libros; la temperatura fuera de
+      # rango afecta el confort de lectura).
+      - name: "Confort Ambiental Biblioteca"
+        unique_id: confort_ambiental_biblioteca
+        state: >
+          {% set t = states('sensor.temperatura_biblioteca') | float(20) %}
+          {% set h = states('sensor.humedad_biblioteca') | float(50) %}
+          {% if t >= 19 and t <= 26 and h >= 40 and h <= 60 %}
+            Óptimo
+          {% elif t >= 15 and t <= 30 and h >= 30 and h <= 70 %}
+            Aceptable
+          {% else %}
+            Fuera de rango
+          {% endif %}
+        icon: >
+          {% set t = states('sensor.temperatura_biblioteca') | float(20) %}
+          {% set h = states('sensor.humedad_biblioteca') | float(50) %}
+          {% if t >= 19 and t <= 26 and h >= 40 and h <= 60 %}
+            mdi:check-circle
+          {% elif t >= 15 and t <= 30 and h >= 30 and h <= 70 %}
+            mdi:alert-circle-outline
+          {% else %}
+            mdi:close-circle
+          {% endif %}

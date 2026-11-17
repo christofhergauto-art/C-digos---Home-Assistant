@@ -1,0 +1,588 @@
+# =========================================================
+# virtual_devices_biblioteca.yaml
+# =========================================================
+# Estructura simulada de la Biblioteca REAL:
+# 8 portafluorescentes (4x40) en 4 zonas de 2 fixtures c/u,
+# 3 aires, 2 ventiladores de techo, 8 tomas, presencia,
+# temp/humedad, luminosidad y apertura de puertas/ventanas.
+#
+# LUCES: ON/OFF puro, sin regulación de intensidad — así es
+# como se comporta el hardware real elegido (Sonoff ZBMINIL2,
+# ver manual). Los fluorescentes normales no se pueden atenuar
+# salvo que se instalen balastos regulables (0-10V o DALI),
+# que no forman parte de este proyecto. La simulación queda
+# así fiel a lo que se va a instalar.
+
+version: 1
+devices:
+
+  # ---------------- ILUMINACIÓN (4 zonas, ON/OFF) ----------------
+  Biblioteca Iluminacion Zona 1:
+    - platform: light
+      name: iluminacion zona 1
+
+  Biblioteca Iluminacion Zona 2:
+    - platform: light
+      name: iluminacion zona 2
+
+  Biblioteca Iluminacion Zona 3:
+    - platform: light
+      name: iluminacion zona 3
+
+  Biblioteca Iluminacion Zona 4:
+    - platform: light
+      name: iluminacion zona 4
+
+  # ---------------- AIRES ACONDICIONADOS (switches base) ----------------
+  Biblioteca Aire 1:
+    - platform: switch
+      name: aire 1
+
+  Biblioteca Aire 2:
+    - platform: switch
+      name: aire 2
+
+  Biblioteca Aire 3:
+    - platform: switch
+      name: aire 3
+
+  Biblioteca Deshumidificador:
+    - platform: switch
+      name: deshumidificador biblioteca
+
+  # ---------------- VENTILADORES DE TECHO ----------------
+  Biblioteca Ventilador Techo 1:
+    - platform: fan
+      name: ventilador 1
+      speed_count: 3
+      oscillate: false
+
+  Biblioteca Ventilador Techo 2:
+    - platform: fan
+      name: ventilador 2
+      speed_count: 3
+      oscillate: false
+
+  # ---------------- TOMACORRIENTES (8) ----------------
+  Biblioteca Toma 01:
+    - platform: switch
+      name: toma 01
+  Biblioteca Toma 02:
+    - platform: switch
+      name: toma 02
+  Biblioteca Toma 03:
+    - platform: switch
+      name: toma 03
+  Biblioteca Toma 04:
+    - platform: switch
+      name: toma 04
+  Biblioteca Toma 05:
+    - platform: switch
+      name: toma 05
+  Biblioteca Toma 06:
+    - platform: switch
+      name: toma 06
+  Biblioteca Toma 07:
+    - platform: switch
+      name: toma 07
+  Biblioteca Toma 08:
+    - platform: switch
+      name: toma 08
+
+  # ---------------- SENSORES AMBIENTALES ----------------
+  Biblioteca Temperatura:
+    - platform: sensor
+      name: temperatura biblioteca
+      class: temperature
+      unit_of_measurement: "°C"
+      initial_value: 24
+
+  Biblioteca Humedad:
+    - platform: sensor
+      name: humedad biblioteca
+      class: humidity
+      unit_of_measurement: "%"
+      initial_value: 50
+
+  Biblioteca Luminosidad:
+    - platform: sensor
+      name: luminosidad biblioteca
+      class: illuminance
+      unit_of_measurement: "lx"
+      initial_value: 300
+
+  # ---------------- PRESENCIA Y ACCESOS ----------------
+  Biblioteca Presencia:
+    - platform: binary_sensor
+      name: presencia biblioteca
+      class: occupancy
+      initial_value: 'off'
+
+  Biblioteca Puerta Principal:
+    - platform: binary_sensor
+      name: puerta principal biblioteca
+      class: door
+      initial_value: 'off'
+
+  Biblioteca Ventana:
+    - platform: binary_sensor
+      name: ventana biblioteca
+      class: window
+      initial_value: 'off'
+
+  Biblioteca Humo:
+    - platform: binary_sensor
+      name: humo biblioteca
+      class: smoke
+      initial_value: 'off'
+
+  Biblioteca CO2:
+    - platform: sensor
+      name: co2 biblioteca
+      class: carbon_dioxide
+      unit_of_measurement: "ppm"
+      initial_value: 450
+
+
+# =========================================================
+# virtual_devices_lab.yaml
+# =========================================================
+# Dispositivos virtuales del Laboratorio de Informática.
+#
+# IMPORTANTE: agregá este bloque de "devices:" DENTRO del
+# mismo archivo virtual.yaml que ya usa tu integración Virtual
+# para la Biblioteca (pegalo debajo de "devices:", al mismo
+# nivel que "Biblioteca Aire 1", etc.) — NO crees una integración
+# Virtual nueva, solo sumá estos dispositivos a la que ya existe.
+#
+# Según el tablero de cargas: 16 tubos (4 luminarias 4x40W),
+# 17 tomas, 4 ventiladores, 2 aires de 24.000 BTU.
+
+  # ---------------- ILUMINACIÓN (2 zonas, ON/OFF) ----------------
+  # Zona Pizarrón: las 2 luminarias más cercanas a la pantalla de
+  # proyección (se atenúan/apagan en Modo Proyección).
+  # Zona General: las otras 2 luminarias del resto de la sala.
+  Lab Iluminacion Zona Pizarron:
+    - platform: light
+      name: lab iluminacion zona pizarron
+
+  Lab Iluminacion Zona General:
+    - platform: light
+      name: lab iluminacion zona general
+
+  # ---------------- VENTILADORES (4) ----------------
+  Lab Ventilador 1:
+    - platform: fan
+      name: lab ventilador 1
+      speed_count: 3
+
+  Lab Ventilador 2:
+    - platform: fan
+      name: lab ventilador 2
+      speed_count: 3
+
+  Lab Ventilador 3:
+    - platform: fan
+      name: lab ventilador 3
+      speed_count: 3
+
+  Lab Ventilador 4:
+    - platform: fan
+      name: lab ventilador 4
+      speed_count: 3
+
+  # ---------------- AIRES ACONDICIONADOS (switches base) ----------------
+  Lab Aire 1:
+    - platform: switch
+      name: lab aire 1
+
+  Lab Aire 2:
+    - platform: switch
+      name: lab aire 2
+
+  # ---------------- TOMACORRIENTES (17) ----------------
+  Lab Toma 01:
+    - platform: switch
+      name: lab toma 01
+  Lab Toma 02:
+    - platform: switch
+      name: lab toma 02
+  Lab Toma 03:
+    - platform: switch
+      name: lab toma 03
+  Lab Toma 04:
+    - platform: switch
+      name: lab toma 04
+  Lab Toma 05:
+    - platform: switch
+      name: lab toma 05
+  Lab Toma 06:
+    - platform: switch
+      name: lab toma 06
+  Lab Toma 07:
+    - platform: switch
+      name: lab toma 07
+  Lab Toma 08:
+    - platform: switch
+      name: lab toma 08
+  Lab Toma 09:
+    - platform: switch
+      name: lab toma 09
+  Lab Toma 10:
+    - platform: switch
+      name: lab toma 10
+  Lab Toma 11:
+    - platform: switch
+      name: lab toma 11
+  Lab Toma 12:
+    - platform: switch
+      name: lab toma 12
+  Lab Toma 13:
+    - platform: switch
+      name: lab toma 13
+  Lab Toma 14:
+    - platform: switch
+      name: lab toma 14
+  Lab Toma 15:
+    - platform: switch
+      name: lab toma 15
+  Lab Toma 16:
+    - platform: switch
+      name: lab toma 16
+  Lab Toma 17:
+    - platform: switch
+      name: lab toma 17
+
+  # ---------------- SENSORES AMBIENTALES ----------------
+  Lab Temperatura:
+    - platform: sensor
+      name: temperatura lab
+      class: temperature
+      unit_of_measurement: "°C"
+      initial_value: 24
+
+  Lab Humedad:
+    - platform: sensor
+      name: humedad lab
+      class: humidity
+      unit_of_measurement: "%"
+      initial_value: 50
+
+  # ---------------- PRESENCIA ----------------
+  Lab Presencia:
+    - platform: binary_sensor
+      name: presencia lab
+      class: occupancy
+      initial_value: 'off'
+
+  # ---------------- CALIDAD DE AIRE Y LUZ NATURAL ----------------
+  Lab CO2:
+    - platform: sensor
+      name: co2 lab
+      class: carbon_dioxide
+      unit_of_measurement: "ppm"
+      initial_value: 450
+
+  Lab Luminosidad:
+    - platform: sensor
+      name: luminosidad lab
+      class: illuminance
+      unit_of_measurement: "lx"
+      initial_value: 300
+
+  # ---------------- SISTEMA AUDIOVISUAL ----------------
+  Lab Proyector:
+    - platform: switch
+      name: lab proyector
+
+  Lab Audio:
+    - platform: switch
+      name: lab audio
+
+  Lab Panel Interactivo:
+    - platform: switch
+      name: lab panel interactivo
+
+  Lab Pantalla Proyeccion:
+    - platform: cover
+      name: lab pantalla proyeccion
+      class: shade
+      
+      
+      # =========================================================
+# =========================================================
+# virtual_devices_multiusos.yaml — Salón Multiusos
+# =========================================================
+# Pegar DENTRO del mismo virtual.yaml que ya usan Biblioteca y Lab
+# (bajo "devices:", al mismo nivel que las demás).
+#
+# Según tablero: 40 tubos (8 luminarias de 5x40W) en 4 zonas,
+# 8 tomas, 4 ventiladores, 3 aires (2x32.000 BTU + 1x24.000 BTU).
+
+  # ---------------- ILUMINACIÓN (4 zonas, ON/OFF) ----------------
+  Multiusos Iluminacion Zona 1:
+    - platform: light
+      name: multiusos iluminacion zona 1
+  Multiusos Iluminacion Zona 2:
+    - platform: light
+      name: multiusos iluminacion zona 2
+  Multiusos Iluminacion Zona 3:
+    - platform: light
+      name: multiusos iluminacion zona 3
+  Multiusos Iluminacion Zona 4:
+    - platform: light
+      name: multiusos iluminacion zona 4
+
+  # ---------------- VENTILADORES (4) ----------------
+  Multiusos Ventilador 1:
+    - platform: fan
+      name: multiusos ventilador 1
+      speed_count: 3
+  Multiusos Ventilador 2:
+    - platform: fan
+      name: multiusos ventilador 2
+      speed_count: 3
+  Multiusos Ventilador 3:
+    - platform: fan
+      name: multiusos ventilador 3
+      speed_count: 3
+  Multiusos Ventilador 4:
+    - platform: fan
+      name: multiusos ventilador 4
+      speed_count: 3
+
+  # ---------------- AIRES (switches base, 3) ----------------
+  Multiusos Aire 1:
+    - platform: switch
+      name: multiusos aire 1
+  Multiusos Aire 2:
+    - platform: switch
+      name: multiusos aire 2
+  Multiusos Aire 3:
+    - platform: switch
+      name: multiusos aire 3
+
+  # ---------------- TOMACORRIENTES (8) ----------------
+  Multiusos Toma 01:
+    - platform: switch
+      name: multiusos toma 01
+  Multiusos Toma 02:
+    - platform: switch
+      name: multiusos toma 02
+  Multiusos Toma 03:
+    - platform: switch
+      name: multiusos toma 03
+  Multiusos Toma 04:
+    - platform: switch
+      name: multiusos toma 04
+  Multiusos Toma 05:
+    - platform: switch
+      name: multiusos toma 05
+  Multiusos Toma 06:
+    - platform: switch
+      name: multiusos toma 06
+  Multiusos Toma 07:
+    - platform: switch
+      name: multiusos toma 07
+  Multiusos Toma 08:
+    - platform: switch
+      name: multiusos toma 08
+
+  # ---------------- SENSORES AMBIENTALES ----------------
+  Multiusos Temperatura:
+    - platform: sensor
+      name: temperatura multiusos
+      class: temperature
+      unit_of_measurement: "°C"
+      initial_value: 24
+  Multiusos Humedad:
+    - platform: sensor
+      name: humedad multiusos
+      class: humidity
+      unit_of_measurement: "%"
+      initial_value: 50
+  Multiusos CO2:
+    - platform: sensor
+      name: co2 multiusos
+      class: carbon_dioxide
+      unit_of_measurement: "ppm"
+      initial_value: 450
+
+  # ---------------- PRESENCIA ----------------
+  Multiusos Presencia:
+    - platform: binary_sensor
+      name: presencia multiusos
+      class: occupancy
+      initial_value: 'off'
+
+  # ---------------- SEGURIDAD Y LUZ NATURAL ----------------
+  Multiusos Humo:
+    - platform: binary_sensor
+      name: humo multiusos
+      class: smoke
+      initial_value: 'off'
+
+  Multiusos Luminosidad:
+    - platform: sensor
+      name: luminosidad multiusos
+      class: illuminance
+      unit_of_measurement: "lx"
+      initial_value: 300
+
+  # ---------------- SISTEMA AUDIOVISUAL Y DE SONIDO ----------------
+  Multiusos Proyector:
+    - platform: switch
+      name: multiusos proyector
+  Multiusos Pantalla Proyeccion:
+    - platform: cover
+      name: multiusos pantalla proyeccion
+      class: shade
+  Multiusos Audio:
+    - platform: switch
+      name: multiusos audio
+  Multiusos Microfonos:
+    - platform: switch
+      name: multiusos microfonos
+      
+      # =========================================================
+# =========================================================
+# virtual_devices_administrativa.yaml — Área Administrativa
+# =========================================================
+# Pegar DENTRO del mismo virtual.yaml que ya usan las otras 3 áreas.
+#
+# 2 zonas climáticas independientes: Área Administrativa (más
+# grande, 2 aires de 24.000 BTU) y Oficina del Director/a
+# (más chica, 1 aire de 12.000 BTU). Según tablero: 20 luces
+# en 1 circuito compartido, 7 tomas, 3 ventiladores, 3 aires.
+
+  # ---------------- ILUMINACIÓN (2 zonas, circuito compartido C-1) ----------------
+  Administrativa Iluminacion Zona Area:
+    - platform: light
+      name: administrativa iluminacion zona area
+  Administrativa Iluminacion Zona Oficina:
+    - platform: light
+      name: administrativa iluminacion zona oficina
+
+  # ---------------- VENTILADORES (3) ----------------
+  Administrativa Ventilador AA 1:
+    - platform: fan
+      name: administrativa ventilador aa 1
+      speed_count: 3
+  Administrativa Ventilador AA 2:
+    - platform: fan
+      name: administrativa ventilador aa 2
+      speed_count: 3
+  Administrativa Ventilador OD 1:
+    - platform: fan
+      name: administrativa ventilador od 1
+      speed_count: 3
+
+  # ---------------- AIRES (switches base, 3) ----------------
+  Administrativa Aire AA 1:
+    - platform: switch
+      name: administrativa aire aa 1
+  Administrativa Aire AA 2:
+    - platform: switch
+      name: administrativa aire aa 2
+  Administrativa Aire OD 1:
+    - platform: switch
+      name: administrativa aire od 1
+
+  # ---------------- TOMACORRIENTES (7) ----------------
+  Administrativa Toma AA 01:
+    - platform: switch
+      name: administrativa toma aa 01
+  Administrativa Toma AA 02:
+    - platform: switch
+      name: administrativa toma aa 02
+  Administrativa Toma AA 03:
+    - platform: switch
+      name: administrativa toma aa 03
+  Administrativa Toma AA 04:
+    - platform: switch
+      name: administrativa toma aa 04
+  Administrativa Toma OD 01:
+    - platform: switch
+      name: administrativa toma od 01
+  Administrativa Toma OD 02:
+    - platform: switch
+      name: administrativa toma od 02
+  Administrativa Toma OD 03:
+    - platform: switch
+      name: administrativa toma od 03
+
+  # ---------------- SENSORES AMBIENTALES (por zona) ----------------
+  Administrativa Temperatura AA:
+    - platform: sensor
+      name: temperatura aa
+      class: temperature
+      unit_of_measurement: "°C"
+      initial_value: 24
+  Administrativa Humedad AA:
+    - platform: sensor
+      name: humedad aa
+      class: humidity
+      unit_of_measurement: "%"
+      initial_value: 50
+  Administrativa Temperatura OD:
+    - platform: sensor
+      name: temperatura od
+      class: temperature
+      unit_of_measurement: "°C"
+      initial_value: 24
+  Administrativa Humedad OD:
+    - platform: sensor
+      name: humedad od
+      class: humidity
+      unit_of_measurement: "%"
+      initial_value: 50
+
+  # ---------------- PRESENCIA Y ACCESOS ----------------
+  Administrativa Presencia AA:
+    - platform: binary_sensor
+      name: presencia aa
+      class: occupancy
+      initial_value: 'off'
+  Administrativa Presencia OD:
+    - platform: binary_sensor
+      name: presencia od
+      class: occupancy
+      initial_value: 'off'
+  Administrativa Puerta Oficina:
+    - platform: binary_sensor
+      name: puerta oficina director
+      class: door
+      initial_value: 'off'
+
+  # ---------------- PROTECCIÓN ELÉCTRICA (2 zonas + BASIC-1GSP) ----------------
+  Administrativa Voltaje AA:
+    - platform: sensor
+      name: voltaje aa
+      class: voltage
+      unit_of_measurement: "V"
+      initial_value: 220
+  Administrativa Corriente AA:
+    - platform: sensor
+      name: corriente aa
+      class: current
+      unit_of_measurement: "A"
+      initial_value: 10
+  Administrativa Corte AA:
+    - platform: switch
+      name: corte aa administrativa
+
+  Administrativa Voltaje OD:
+    - platform: sensor
+      name: voltaje od
+      class: voltage
+      unit_of_measurement: "V"
+      initial_value: 220
+  Administrativa Corriente OD:
+    - platform: sensor
+      name: corriente od
+      class: current
+      unit_of_measurement: "A"
+      initial_value: 5
+  Administrativa Corte OD:
+    - platform: switch
+      name: corte od administrativa

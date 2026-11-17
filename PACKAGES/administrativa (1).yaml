@@ -1,0 +1,127 @@
+# =========================================================
+# PACKAGE: administrativa.yaml
+# =========================================================
+# UBICACIÓN: /config/packages/administrativa.yaml
+# Termostatos reales (2 zonas) + consumo según tablero real:
+# 800W luces + 400W tomas AA + 300W tomas OD + 150W vent OD +
+# 300W vent AA + 5.000W aires AA + 1.500W aire OD = 8.450W
+
+climate:
+  - platform: generic_thermostat
+    name: Aire Administrativa AA 1
+    heater: switch.administrativa_aire_aa_1
+    target_sensor: sensor.temperatura_aa
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+  - platform: generic_thermostat
+    name: Aire Administrativa AA 2
+    heater: switch.administrativa_aire_aa_2
+    target_sensor: sensor.temperatura_aa
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+  - platform: generic_thermostat
+    name: Aire Administrativa OD 1
+    heater: switch.administrativa_aire_od_1
+    target_sensor: sensor.temperatura_od
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+sensor:
+  - platform: history_stats
+    name: "Horas Aires AA (hoy)"
+    entity_id: switch.administrativa_aire_aa_1
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+  - platform: history_stats
+    name: "Horas Aire OD (hoy)"
+    entity_id: switch.administrativa_aire_od_1
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+  - platform: history_stats
+    name: "Horas Corte AA (hoy)"
+    entity_id: switch.corte_aa_administrativa
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+  - platform: history_stats
+    name: "Horas Corte OD (hoy)"
+    entity_id: switch.corte_od_administrativa
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+template:
+  - sensor:
+      # ---------------- CONSUMO TOTAL (tablero de cargas real) ----------------
+      # Luces: 800W en circuito único, repartido 600W Área Admin / 200W Oficina
+      # (proporcional al tamaño de cada ambiente)
+      - name: "Consumo Total Administrativa"
+        unique_id: consumo_total_administrativa
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set luces = (600 if is_state('light.administrativa_iluminacion_zona_area','on') else 0)
+                        + (200 if is_state('light.administrativa_iluminacion_zona_oficina','on') else 0) %}
+          {% set aires = (2500 if is_state('switch.administrativa_aire_aa_1','on') else 0)
+                        + (2500 if is_state('switch.administrativa_aire_aa_2','on') else 0)
+                        + (1500 if is_state('switch.administrativa_aire_od_1','on') else 0) %}
+          {% set ventiladores = (150 if is_state('fan.administrativa_ventilador_aa_1','on') else 0)
+                               + (150 if is_state('fan.administrativa_ventilador_aa_2','on') else 0)
+                               + (150 if is_state('fan.administrativa_ventilador_od_1','on') else 0) %}
+          {% set tomas_aa = states.switch
+                | selectattr('entity_id', 'match', 'switch.administrativa_toma_aa_')
+                | selectattr('state', 'eq', 'on')
+                | list | count * 100 %}
+          {% set tomas_od = states.switch
+                | selectattr('entity_id', 'match', 'switch.administrativa_toma_od_')
+                | selectattr('state', 'eq', 'on')
+                | list | count * 100 %}
+          {{ luces + aires + ventiladores + tomas_aa + tomas_od }}
+
+      # ---------------- CONFORT AMBIENTAL (por zona) ----------------
+      - name: "Confort Ambiental AA"
+        unique_id: confort_ambiental_aa
+        state: >
+          {% set t = states('sensor.temperatura_aa') | float(20) %}
+          {% set h = states('sensor.humedad_aa') | float(50) %}
+          {% if t >= 19 and t <= 26 and h >= 40 and h <= 60 %}Óptimo
+          {% elif t >= 15 and t <= 30 and h >= 30 and h <= 70 %}Aceptable
+          {% else %}Fuera de rango{% endif %}
+
+      - name: "Confort Ambiental OD"
+        unique_id: confort_ambiental_od
+        state: >
+          {% set t = states('sensor.temperatura_od') | float(20) %}
+          {% set h = states('sensor.humedad_od') | float(50) %}
+          {% if t >= 19 and t <= 26 and h >= 40 and h <= 60 %}Óptimo
+          {% elif t >= 15 and t <= 30 and h >= 30 and h <= 70 %}Aceptable
+          {% else %}Fuera de rango{% endif %}

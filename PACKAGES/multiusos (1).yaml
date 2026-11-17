@@ -1,0 +1,120 @@
+# =========================================================
+# PACKAGE: multiusos.yaml
+# =========================================================
+# UBICACIÓN: /config/packages/multiusos.yaml
+# Termostatos reales + consumo según tablero de cargas:
+# 40x40W=1.600W, 8 tomas x100W=800W, 4 vent. x150W=600W,
+# 2 aires 32BTU x3.500W + 1 aire 24BTU x2.500W = 9.500W
+
+climate:
+  - platform: generic_thermostat
+    name: Aire Multiusos 1
+    heater: switch.multiusos_aire_1
+    target_sensor: sensor.temperatura_multiusos
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+  - platform: generic_thermostat
+    name: Aire Multiusos 2
+    heater: switch.multiusos_aire_2
+    target_sensor: sensor.temperatura_multiusos
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+  - platform: generic_thermostat
+    name: Aire Multiusos 3
+    heater: switch.multiusos_aire_3
+    target_sensor: sensor.temperatura_multiusos
+    min_temp: 19
+    max_temp: 28
+    target_temp: 24
+    ac_mode: true
+    cold_tolerance: 0.3
+    hot_tolerance: 0.3
+    min_cycle_duration:
+      minutes: 5
+    initial_hvac_mode: "off"
+
+sensor:
+  - platform: history_stats
+    name: "Horas Proyector Multiusos (hoy)"
+    entity_id: switch.multiusos_proyector
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+  - platform: history_stats
+    name: "Horas Audio Multiusos (hoy)"
+    entity_id: switch.multiusos_audio
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+  - platform: history_stats
+    name: "Horas Presencia Multiusos (hoy)"
+    entity_id: binary_sensor.presencia_multiusos
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+template:
+  - sensor:
+      - name: "Consumo Total Multiusos"
+        unique_id: consumo_total_multiusos
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set luces = (400 if is_state('light.multiusos_iluminacion_zona_1','on') else 0)
+                        + (400 if is_state('light.multiusos_iluminacion_zona_2','on') else 0)
+                        + (400 if is_state('light.multiusos_iluminacion_zona_3','on') else 0)
+                        + (400 if is_state('light.multiusos_iluminacion_zona_4','on') else 0) %}
+          {% set aires = (3500 if is_state('switch.multiusos_aire_1','on') else 0)
+                        + (3500 if is_state('switch.multiusos_aire_2','on') else 0)
+                        + (2500 if is_state('switch.multiusos_aire_3','on') else 0) %}
+          {% set ventiladores = (150 if is_state('fan.multiusos_ventilador_1','on') else 0)
+                               + (150 if is_state('fan.multiusos_ventilador_2','on') else 0)
+                               + (150 if is_state('fan.multiusos_ventilador_3','on') else 0)
+                               + (150 if is_state('fan.multiusos_ventilador_4','on') else 0) %}
+          {% set tomas = states.switch
+                | selectattr('entity_id', 'match', 'switch.multiusos_toma_')
+                | selectattr('state', 'eq', 'on')
+                | list | count * 100 %}
+          {{ luces + aires + ventiladores + tomas }}
+
+      - name: "Confort Ambiental Multiusos"
+        unique_id: confort_ambiental_multiusos
+        state: >
+          {% set t = states('sensor.temperatura_multiusos') | float(20) %}
+          {% set h = states('sensor.humedad_multiusos') | float(50) %}
+          {% if t >= 19 and t <= 26 and h >= 40 and h <= 60 %}
+            Óptimo
+          {% elif t >= 15 and t <= 30 and h >= 30 and h <= 70 %}
+            Aceptable
+          {% else %}
+            Fuera de rango
+          {% endif %}
+        icon: >
+          {% set t = states('sensor.temperatura_multiusos') | float(20) %}
+          {% set h = states('sensor.humedad_multiusos') | float(50) %}
+          {% if t >= 19 and t <= 26 and h >= 40 and h <= 60 %}
+            mdi:check-circle
+          {% elif t >= 15 and t <= 30 and h >= 30 and h <= 70 %}
+            mdi:alert-circle-outline
+          {% else %}
+            mdi:close-circle
+          {% endif %}

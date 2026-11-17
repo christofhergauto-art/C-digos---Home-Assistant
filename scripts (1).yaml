@@ -1,0 +1,682 @@
+# =========================================================
+# scripts.yaml
+# =========================================================
+# Lista de scripts (sin la palabra "script:" arriba — esa va
+# solo en configuration.yaml: script: !include scripts.yaml
+# Si ya tenías otros scripts, pegá este bloque al final del
+# archivo, respetando la indentación).
+#
+# UN SOLO SCRIPT: recorre y demuestra CADA función del sistema,
+# en orden, con pausas para poder verlo en el dashboard.
+# Requiere que existan estos helpers (Ayudantes):
+#   input_number.control_temperatura_biblioteca
+#   input_number.control_humedad_biblioteca
+#   input_boolean.simular_presencia_biblioteca
+#   input_boolean.modo_automatico_biblioteca
+
+biblioteca_simulacion_general:
+  alias: "Biblioteca - Simulación general (demuestra todo el sistema)"
+  icon: mdi:cog-play
+  sequence:
+
+    # =====================================================
+    # 0) RESET: estado inicial limpio
+    # =====================================================
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.modo_automatico_biblioteca
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        hvac_mode: "off"
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.aire_1
+          - switch.aire_2
+          - switch.aire_3
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.control_temperatura_biblioteca
+      data:
+        value: 24
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.control_humedad_biblioteca
+      data:
+        value: 50
+    - service: virtual.set
+      target:
+        entity_id: sensor.luminosidad_biblioteca
+      data:
+        value: 300
+    - service: virtual.set
+      target:
+        entity_id: sensor.co2_biblioteca
+      data:
+        value: 450
+    - service: light.turn_off
+      target:
+        entity_id:
+          - light.iluminacion_zona_1
+          - light.iluminacion_zona_2
+          - light.iluminacion_zona_3
+          - light.iluminacion_zona_4
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        hvac_mode: "off"
+    - service: fan.turn_off
+      target:
+        entity_id:
+          - fan.ventilador_1
+          - fan.ventilador_2
+    - service: switch.turn_off
+      target:
+        entity_id: switch.deshumidificador_biblioteca
+
+    # =====================================================
+    # 1) PRESENCIA: alguien entra -> dispara luces + ventilador
+    #    (a 24°C todavía no amerita aire, elige ventilador)
+    # =====================================================
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.simular_presencia_biblioteca
+    - delay:
+        seconds: 8
+
+    # =====================================================
+    # 2) LUCES: control independiente por zona (ON/OFF, fiel
+    #    al hardware real — sin regulación de intensidad)
+    # =====================================================
+    - service: light.turn_off
+      target:
+        entity_id: light.iluminacion_zona_1
+    - delay:
+        seconds: 3
+    - service: light.turn_on
+      target:
+        entity_id: light.iluminacion_zona_1
+    - delay:
+        seconds: 2
+    - service: light.turn_off
+      target:
+        entity_id: light.iluminacion_zona_3
+    - delay:
+        seconds: 3
+    - service: light.turn_on
+      target:
+        entity_id: light.iluminacion_zona_3
+    - delay:
+        seconds: 5
+
+    # =====================================================
+    # 3) LUCES POR SITUACIÓN: entra mucha luz natural -> se
+    #    apagan solas (con gente presente)
+    # =====================================================
+    - service: virtual.set
+      target:
+        entity_id: sensor.luminosidad_biblioteca
+      data:
+        value: 600
+    - delay:
+        seconds: 6
+
+    # --- Anochece: poca luz natural -> se prenden solas ---
+    - service: virtual.set
+      target:
+        entity_id: sensor.luminosidad_biblioteca
+      data:
+        value: 100
+    - delay:
+        seconds: 6
+    - service: virtual.set
+      target:
+        entity_id: sensor.luminosidad_biblioteca
+      data:
+        value: 300
+
+    # =====================================================
+    # 4) VENTILADORES: regular velocidades baja/media/alta
+    # =====================================================
+    - service: fan.turn_on
+      target:
+        entity_id:
+          - fan.ventilador_1
+          - fan.ventilador_2
+    - service: fan.set_percentage
+      target:
+        entity_id:
+          - fan.ventilador_1
+          - fan.ventilador_2
+      data:
+        percentage: 33
+    - delay:
+        seconds: 5
+    - service: fan.set_percentage
+      target:
+        entity_id:
+          - fan.ventilador_1
+          - fan.ventilador_2
+      data:
+        percentage: 66
+    - delay:
+        seconds: 5
+    - service: fan.set_percentage
+      target:
+        entity_id:
+          - fan.ventilador_1
+          - fan.ventilador_2
+      data:
+        percentage: 100
+    - delay:
+        seconds: 5
+    - service: fan.turn_off
+      target:
+        entity_id:
+          - fan.ventilador_1
+          - fan.ventilador_2
+
+    # =====================================================
+    # 5) AIRE AUTOMÁTICO: temperatura crítica -> se programa
+    #    solo a 25°C + deshumidificador ON
+    # =====================================================
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.control_temperatura_biblioteca
+      data:
+        value: 30
+    - delay:
+        seconds: 8
+
+    # =====================================================
+    # 6) AIRE: como un termostato real — enciendo y regulo
+    #    la temperatura deseada directamente
+    # =====================================================
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        hvac_mode: cool
+    - service: climate.set_temperature
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        temperature: 19
+    - delay:
+        seconds: 6
+    - service: climate.set_temperature
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        temperature: 27
+    - delay:
+        seconds: 6
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_biblioteca_1
+          - climate.aire_biblioteca_2
+          - climate.aire_biblioteca_3
+      data:
+        hvac_mode: "off"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.control_temperatura_biblioteca
+      data:
+        value: 24
+    - delay:
+        seconds: 5
+
+    # =====================================================
+    # 7) HUMEDAD: sube, baja, se normaliza
+    # =====================================================
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.control_humedad_biblioteca
+      data:
+        value: 65
+    - delay:
+        seconds: 5
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.control_humedad_biblioteca
+      data:
+        value: 35
+    - delay:
+        seconds: 5
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.control_humedad_biblioteca
+      data:
+        value: 50
+
+    # =====================================================
+    # 8) PUERTA y VENTANA: abrir y cerrar (suman al contador)
+    # =====================================================
+    - service: virtual.turn_on
+      target:
+        entity_id: binary_sensor.puerta_principal_biblioteca
+    - delay:
+        seconds: 3
+    - service: virtual.turn_off
+      target:
+        entity_id: binary_sensor.puerta_principal_biblioteca
+    - delay:
+        seconds: 3
+    - service: virtual.turn_on
+      target:
+        entity_id: binary_sensor.ventana_biblioteca
+    - delay:
+        seconds: 3
+    - service: virtual.turn_off
+      target:
+        entity_id: binary_sensor.ventana_biblioteca
+    - delay:
+        seconds: 3
+
+    # =====================================================
+    # 9) HUMO: alerta de seguridad -> corta aire, prende
+    #    todas las luces, notifica
+    # =====================================================
+    - service: virtual.turn_on
+      target:
+        entity_id: binary_sensor.humo_biblioteca
+    - delay:
+        seconds: 6
+    - service: virtual.turn_off
+      target:
+        entity_id: binary_sensor.humo_biblioteca
+    - delay:
+        seconds: 3
+
+    # =====================================================
+    # 10) CO2: sube -> ventila solo prendiendo ventiladores
+    # =====================================================
+    - service: virtual.set
+      target:
+        entity_id: sensor.co2_biblioteca
+      data:
+        value: 1200
+    - delay:
+        seconds: 6
+    - service: virtual.set
+      target:
+        entity_id: sensor.co2_biblioteca
+      data:
+        value: 450
+    - delay:
+        seconds: 3
+
+    # =====================================================
+    # 11) PRESENCIA: la gente se va -> se apaga todo solo
+    # =====================================================
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.simular_presencia_biblioteca
+
+    # =====================================================
+    # FIN: valores vuelven a la normalidad
+    # =====================================================
+    - delay:
+        seconds: 3
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.control_temperatura_biblioteca
+      data:
+        value: 24
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.control_humedad_biblioteca
+      data:
+        value: 50
+  mode: restart
+  
+ 
+ 
+ 
+ 
+ 
+ # =========================================================
+# scripts_lab.yaml — Laboratorio de Informática
+# =========================================================
+# Pegar al final de tu scripts.yaml existente.
+# Requiere: input_number.lab_control_temperatura,
+# input_boolean.lab_simular_presencia,
+# input_select.lab_modo_clase (4 opciones: Normal, Proyección,
+# Pizarra Interactiva, Ahorro)
+
+lab_simulacion_general:
+  alias: "Lab - Simulación general (recorre los 4 modos)"
+  icon: mdi:cog-play
+  sequence:
+    # --- Reset ---
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.lab_modo_clase
+      data:
+        option: "Ahorro"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.lab_control_temperatura
+      data:
+        value: 24
+
+    # --- 1) Llegan los alumnos: pasa a Normal solo ---
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.lab_simular_presencia
+    - delay:
+        seconds: 8
+
+    # --- 2) Clase con proyector ---
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.lab_modo_clase
+      data:
+        option: "Proyección"
+    - delay:
+        seconds: 8
+
+    # --- 3) Actividad con pizarra interactiva ---
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.lab_modo_clase
+      data:
+        option: "Pizarra Interactiva"
+    - delay:
+        seconds: 8
+
+    # --- 4) Vuelve a clase normal (sin proyector) ---
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.lab_modo_clase
+      data:
+        option: "Normal"
+    - delay:
+        seconds: 6
+
+    # --- 5) Temperatura crítica (protección térmica) ---
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.lab_control_temperatura
+      data:
+        value: 30
+    - delay:
+        seconds: 8
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.lab_control_temperatura
+      data:
+        value: 24
+    - delay:
+        seconds: 5
+
+    # --- 6) Los alumnos se van: pasa a Ahorro automático ---
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.lab_simular_presencia
+  mode: restart
+  
+  # =========================================================
+# =========================================================
+# scripts_multiusos.yaml — Salón Multiusos
+# =========================================================
+# Pegar al final de tu scripts.yaml existente.
+
+multiusos_simulacion_general:
+  alias: "Multiusos - Simulación general (recorre los 6 modos)"
+  icon: mdi:cog-play
+  sequence:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.multiusos_modo_salon
+      data:
+        option: "Ahorro"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.multiusos_control_temperatura
+      data:
+        value: 24
+
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.multiusos_simular_presencia
+    - delay:
+        seconds: 8
+
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.multiusos_modo_salon
+      data:
+        option: "Conferencia"
+    - delay:
+        seconds: 7
+
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.multiusos_modo_salon
+      data:
+        option: "Proyección"
+    - delay:
+        seconds: 7
+
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.multiusos_modo_salon
+      data:
+        option: "Evento"
+    - delay:
+        seconds: 7
+
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.multiusos_modo_salon
+      data:
+        option: "Ventilación"
+    - delay:
+        seconds: 7
+
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.multiusos_modo_salon
+      data:
+        option: "Reunión"
+    - delay:
+        seconds: 6
+
+    # --- Probar la alarma de humo -> modo Emergencia ---
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.multiusos_simular_humo
+    - delay:
+        seconds: 6
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.multiusos_simular_humo
+    - delay:
+        seconds: 3
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.multiusos_modo_salon
+      data:
+        option: "Reunión"
+    - delay:
+        seconds: 3
+
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.multiusos_control_temperatura
+      data:
+        value: 30
+    - delay:
+        seconds: 8
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.multiusos_control_temperatura
+      data:
+        value: 24
+    - delay:
+        seconds: 5
+
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.multiusos_simular_presencia
+  mode: restart
+  
+  # =========================================================
+## =========================================================
+# scripts_administrativa.yaml — Área Administrativa
+# =========================================================
+# Pegar al final de tu scripts.yaml existente.
+
+administrativa_simulacion_general:
+  alias: "Administrativa - Simulación general (modos + protección por zona)"
+  icon: mdi:cog-play
+  sequence:
+    # --- Reset ---
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.corte_aa_administrativa
+          - switch.corte_od_administrativa
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.administrativa_modo
+      data:
+        option: "Ahorro"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.administrativa_control_voltaje_aa
+      data:
+        value: 220
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.administrativa_control_voltaje_od
+      data:
+        value: 220
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.administrativa_control_corriente_aa
+      data:
+        value: 10
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.administrativa_control_corriente_od
+      data:
+        value: 5
+
+    # --- 1) Llega el personal: modo Trabajo ---
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.administrativa_simular_presencia_aa
+    - delay:
+        seconds: 8
+
+    # --- 2) Reunión en la oficina del director ---
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.administrativa_simular_presencia_od
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.administrativa_modo
+      data:
+        option: "Reunión"
+    - delay:
+        seconds: 8
+
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.administrativa_modo
+      data:
+        option: "Trabajo"
+    - delay:
+        seconds: 5
+
+    # --- 3) Falla SOLO en la zona Área Administrativa ---
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.administrativa_control_voltaje_aa
+      data:
+        value: 190
+    - delay:
+        seconds: 6
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.administrativa_control_voltaje_aa
+      data:
+        value: 220
+    - delay:
+        seconds: 3
+    - service: switch.turn_off
+      target:
+        entity_id: switch.corte_aa_administrativa
+    - delay:
+        seconds: 3
+
+    # --- 4) Falla GENERAL: ambas zonas con corriente alta a la vez ---
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.administrativa_control_corriente_aa
+      data:
+        value: 25
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.administrativa_control_corriente_od
+      data:
+        value: 25
+    - delay:
+        seconds: 6
+
+    # --- 5) Se normaliza y se repone manualmente (las 2 zonas) ---
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.administrativa_control_corriente_aa
+      data:
+        value: 10
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.administrativa_control_corriente_od
+      data:
+        value: 5
+    - delay:
+        seconds: 3
+    - service: switch.turn_off
+      target:
+        entity_id:
+          - switch.corte_aa_administrativa
+          - switch.corte_od_administrativa
+    - delay:
+        seconds: 3
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.administrativa_modo
+      data:
+        option: "Trabajo"
+    - delay:
+        seconds: 5
+
+    # --- 6) Se van todos: Ahorro automático ---
+    - service: input_boolean.turn_off
+      target:
+        entity_id:
+          - input_boolean.administrativa_simular_presencia_aa
+          - input_boolean.administrativa_simular_presencia_od
+  mode: restart
