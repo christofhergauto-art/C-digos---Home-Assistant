@@ -1639,10 +1639,8 @@
       data:
         value: "{{ trigger.to_state.state }}"
   mode: single
-  
-  
-  # =========================================================
-# =========================================================
+ 
+ # =========================================================
 # automations_administrativa.yaml — Área Administrativa
 # =========================================================
 # Pegar al final de tu automations.yaml existente.
@@ -1656,6 +1654,20 @@
 # circuito puntual) y se cortan las dos juntas. Ningún corte se
 # restablece solo — requiere reposición manual del switch
 # correspondiente.
+#
+# Los cortes se registran en dos ayudantes (input_boolean):
+#   input_boolean.corte_aa_administrativa / input_boolean.corte_od_administrativa
+# Se ENCIENDEN solos al detectar la falla y solo se APAGAN a mano
+# (reposición manual). Mientras alguno esté encendido, ningún modo,
+# termostato ni automatización vuelve a encender los equipos.
+#
+# Umbrales coordinados con el tablero (apartado 2.8.5 del PFG):
+#   Zona AA: I_B ≈ 28,8 A < corte 30 A < cabecera 32 A
+#   Zona OD: I_B ≈ 9,8 A  < corte 22 A < cabecera 25 A
+#   Tensión: corte por debajo de 200 V o por encima de 240 V
+# Cada corte apaga también el termostato (climate) de su zona, para
+# que el generic_thermostat no vuelva a encender el aire mientras
+# la falla esté activa.
 
 # ---------------------------------------------------------
 # Zona Área Administrativa: tensión fuera de rango
@@ -1670,9 +1682,16 @@
       entity_id: sensor.voltaje_aa
       above: 240
   action:
-    - service: switch.turn_on
+    - service: input_boolean.turn_on
       target:
-        entity_id: switch.corte_aa_administrativa
+        entity_id: input_boolean.corte_aa_administrativa
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_administrativa_aa_1
+          - climate.aire_administrativa_aa_2
+      data:
+        hvac_mode: "off"
     - service: switch.turn_off
       target:
         entity_id:
@@ -1690,22 +1709,29 @@
     - service: persistent_notification.create
       data:
         title: "⚠️ Área Administrativa - Tensión anormal"
-        message: "Corte de la zona Área Administrativa activado (BASIC-1GSP AA). Revisar antes de reponer manualmente switch.corte_aa_administrativa."
+        message: "Corte de la zona Área Administrativa activado (BASIC-1GSP AA). Revisar antes de reponer manualmente input_boolean.corte_aa_administrativa."
   mode: single
 
 # ---------------------------------------------------------
 # Zona Área Administrativa: sobrecorriente propia
 # ---------------------------------------------------------
 - id: administrativa_proteccion_aa_corriente
-  alias: "Administrativa - ⚠️ Zona AA: sobrecorriente"
+  alias: "Administrativa - ⚠️ Zona AA: sobrecorriente (>30 A)"
   trigger:
     - platform: numeric_state
       entity_id: sensor.corriente_aa
-      above: 28
+      above: 30
   action:
-    - service: switch.turn_on
+    - service: input_boolean.turn_on
       target:
-        entity_id: switch.corte_aa_administrativa
+        entity_id: input_boolean.corte_aa_administrativa
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_administrativa_aa_1
+          - climate.aire_administrativa_aa_2
+      data:
+        hvac_mode: "off"
     - service: switch.turn_off
       target:
         entity_id:
@@ -1723,7 +1749,7 @@
     - service: persistent_notification.create
       data:
         title: "⚠️ Área Administrativa - Sobrecorriente"
-        message: "Corriente de la zona AA por encima de 28A (límite del BASIC-1GSP: 32A). Corte activado. Revisar antes de reponer manualmente."
+        message: "Corriente de la zona AA por encima de 30A (interruptor de cabecera y BASIC-1GSP: 32A). Corte activado. Revisar antes de reponer manualmente input_boolean.corte_aa_administrativa."
   mode: single
 
 # ---------------------------------------------------------
@@ -1739,9 +1765,15 @@
       entity_id: sensor.voltaje_od
       above: 240
   action:
-    - service: switch.turn_on
+    - service: input_boolean.turn_on
       target:
-        entity_id: switch.corte_od_administrativa
+        entity_id: input_boolean.corte_od_administrativa
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_administrativa_od_1
+      data:
+        hvac_mode: "off"
     - service: switch.turn_off
       target:
         entity_id:
@@ -1755,22 +1787,28 @@
     - service: persistent_notification.create
       data:
         title: "⚠️ Oficina del Director - Tensión anormal"
-        message: "Corte de la zona Oficina del Director activado (BASIC-1GSP OD). Revisar antes de reponer manualmente switch.corte_od_administrativa."
+        message: "Corte de la zona Oficina del Director activado (BASIC-1GSP OD). Revisar antes de reponer manualmente input_boolean.corte_od_administrativa."
   mode: single
 
 # ---------------------------------------------------------
 # Zona Oficina del Director: sobrecorriente propia
 # ---------------------------------------------------------
 - id: administrativa_proteccion_od_corriente
-  alias: "Administrativa - ⚠️ Zona OD: sobrecorriente"
+  alias: "Administrativa - ⚠️ Zona OD: sobrecorriente (>22 A)"
   trigger:
     - platform: numeric_state
       entity_id: sensor.corriente_od
-      above: 28
+      above: 22
   action:
-    - service: switch.turn_on
+    - service: input_boolean.turn_on
       target:
-        entity_id: switch.corte_od_administrativa
+        entity_id: input_boolean.corte_od_administrativa
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_administrativa_od_1
+      data:
+        hvac_mode: "off"
     - service: switch.turn_off
       target:
         entity_id:
@@ -1784,7 +1822,7 @@
     - service: persistent_notification.create
       data:
         title: "⚠️ Oficina del Director - Sobrecorriente"
-        message: "Corriente de la zona OD por encima de 28A. Corte activado. Revisar antes de reponer manualmente."
+        message: "Corriente de la zona OD por encima de 22A (interruptor de cabecera: 25A). Corte activado. Revisar antes de reponer manualmente input_boolean.corte_od_administrativa."
   mode: single
 
 # ---------------------------------------------------------
@@ -1800,11 +1838,19 @@
         {{ states('sensor.corriente_aa')|float(0) > 20
            and states('sensor.corriente_od')|float(0) > 20 }}
   action:
-    - service: switch.turn_on
+    - service: input_boolean.turn_on
       target:
         entity_id:
-          - switch.corte_aa_administrativa
-          - switch.corte_od_administrativa
+          - input_boolean.corte_aa_administrativa
+          - input_boolean.corte_od_administrativa
+    - service: climate.set_hvac_mode
+      target:
+        entity_id:
+          - climate.aire_administrativa_aa_1
+          - climate.aire_administrativa_aa_2
+          - climate.aire_administrativa_od_1
+      data:
+        hvac_mode: "off"
     - service: switch.turn_off
       target:
         entity_id:
@@ -1916,6 +1962,10 @@
     - platform: numeric_state
       entity_id: sensor.temperatura_aa
       above: 29
+  condition:
+    - condition: state
+      entity_id: input_boolean.corte_aa_administrativa
+      state: "off"
   action:
     - service: climate.set_hvac_mode
       target:
@@ -1939,6 +1989,10 @@
     - platform: numeric_state
       entity_id: sensor.temperatura_od
       above: 29
+  condition:
+    - condition: state
+      entity_id: input_boolean.corte_od_administrativa
+      state: "off"
   action:
     - service: climate.set_hvac_mode
       target:
@@ -1963,10 +2017,10 @@
       entity_id: input_select.administrativa_modo
   condition:
     - condition: state
-      entity_id: switch.corte_aa_administrativa
+      entity_id: input_boolean.corte_aa_administrativa
       state: "off"
     - condition: state
-      entity_id: switch.corte_od_administrativa
+      entity_id: input_boolean.corte_od_administrativa
       state: "off"
   action:
     - choose:
