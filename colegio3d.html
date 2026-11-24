@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colegio automatizado en 3D</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: técnica y sobria, a juego con la defensa del PFG
+   IDEA: maqueta de arquitecto de cada ambiente, con las paredes cercanas recortadas
+   PICTURE: el ambiente en 3D con los dispositivos numerados como en los planos
+   COLOUR and TYPE: carbón #27272B y amarillo #FFE14D, el diseño de la presentación; Inter
+   LAYOUT: pestañas de área, escena grande, modos y leyenda debajo */
+:root{color-scheme:dark;--bg:#27272B;--card:#35353A;--line:#46464A;--ink:#D7D4CC;--mute:#B5B2AC;--acc:#FFE14D}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+header{padding:18px max(4vw,16px) 6px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:end;justify-content:space-between}
+h1{margin:0;font-size:clamp(24px,3.6vw,36px);line-height:1.05;color:var(--acc);font-weight:800;text-wrap:balance}
+.badge{font-size:13px;font-weight:600;padding:5px 12px;border-radius:999px;border:1px solid var(--line);color:var(--mute)}
+.badge.live{border-color:#6FCF97;color:#6FCF97}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:8px max(4vw,16px) 0}
+.tabs button,.views button,.modes button,.tog{font:600 14px Inter,sans-serif;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:#2f2f34ee;color:var(--ink);cursor:pointer;flex:none}
+.tabs button[aria-selected=true],.modes button[aria-pressed=true]{background:var(--acc);color:#27272B;border-color:var(--acc)}
+button:hover{border-color:var(--acc)}button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.stage{position:relative;height:min(64vh,620px);min-height:340px;margin:10px max(4vw,16px) 0;border-radius:14px;overflow:hidden;background:#1d1d20;border:1px solid var(--line)}
+.stage canvas{display:block}
+.lbl{position:absolute;inset:0;pointer-events:none}
+.mk{width:22px;height:22px;display:grid;place-items:center;color:#fff;font:700 12px/1 "Times New Roman",serif;border:1px solid #fff;border-radius:3px;box-shadow:0 1px 4px #0008}
+.views{position:absolute;top:10px;right:10px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.hint{position:absolute;left:12px;bottom:10px;color:var(--mute);font-size:13px;background:#1d1d20cc;padding:4px 10px;border-radius:8px}
+.panel{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:22px;padding:18px max(4vw,16px) 12px}
+h2{font-size:17px;margin:0 0 10px;color:var(--acc)}
+.modes{display:flex;flex-wrap:wrap;gap:8px}
+.ctrls button{font-weight:600}.ctrls button[aria-pressed=true]{background:#6FCF97;border-color:#6FCF97;color:#1d1d20}.ctrls button.cut[aria-pressed=true]{background:#F2994A;border-color:#F2994A}
+.stage canvas{cursor:grab}
+.state{margin-top:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.st{background:var(--card);border-radius:10px;padding:8px 10px}
+.st b{display:block;font-size:13px;color:var(--mute);font-weight:600}
+.st span{font-weight:800;font-size:15px}
+.on{color:#6FCF97}.off{color:#8d8a84}.bad{color:#F2994A}
+.desc{margin:12px 0 0;font-size:15px}
+.legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px;margin:0;padding:0;list-style:none}
+.legend li{display:flex;gap:10px;align-items:center;font-size:14px}
+.legend .mk{flex:none}
+.legend small{display:block;color:var(--mute);font-size:13px}
+.note{color:var(--mute);font-size:13px;margin:12px 0 0}
+details{margin:0 max(4vw,16px) 28px;background:var(--card);border-radius:12px;padding:12px 16px}
+summary{cursor:pointer;font-weight:700;color:var(--acc)}
+details ol{padding-left:20px}details code{background:#1d1d20;padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+pre{background:#1d1d20;padding:10px;border-radius:8px;overflow-x:auto;font-size:13px}
+@media(max-width:760px){.panel{grid-template-columns:1fr}}
+@media(max-width:420px){.legend{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Colegio Técnico Nacional “Prof. Andrés Aguirre” en 3D</h1>
+  <span class="badge" id="badge">Demostración</span>
+</header>
+<nav class="tabs" role="tablist" aria-label="Área">
+  <button role="tab" data-a="biblioteca">Biblioteca</button>
+  <button role="tab" data-a="laboratorio">Laboratorio de informática</button>
+  <button role="tab" data-a="multiusos">Salón multiusos</button>
+  <button role="tab" data-a="administrativa">Área administrativa</button>
+</nav>
+<div class="stage" id="stage">
+  <div class="views" role="group" aria-label="Vistas de cámara">
+    <button data-v="general">Vista general</button>
+    <button data-v="puerta">Desde la puerta</button>
+    <button data-v="planta">Planta</button>
+  </div>
+  <div class="hint">Arrastrá para girar · rueda o pellizco para acercar</div>
+</div>
+<section class="panel">
+  <div>
+    <h2 id="mtitle">Escenarios</h2>
+    <div class="modes" id="modes" role="group" aria-label="Modos"></div>
+    <div class="state" id="state"></div>
+    <p class="desc" id="desc"></p>
+    <h2 style="margin-top:18px">Control manual</h2>
+    <div class="modes ctrls" id="ctrls" role="group" aria-label="Control manual"></div>
+    <p class="note">También podés tocar luces, ventiladores, aires, el proyector y la pantalla directamente en el modelo.</p>
+    <button class="tog" id="tog" aria-pressed="true">Ocultar números</button>
+  </div>
+  <div>
+    <h2>Referencias del plano</h2>
+    <ul class="legend" id="legend"></ul>
+    <p class="note" id="note"></p>
+  </div>
+</section>
+<details>
+  <summary>Cómo verlo dentro de Home Assistant</summary>
+  <ol>
+    <li>Copiá este archivo a la carpeta <code>/config/www/</code> de Home Assistant con el nombre <code>colegio3d.html</code> (por ejemplo con el complemento File editor o Samba). Si la carpeta <code>www</code> no existe, creala y reiniciá Home Assistant.</li>
+    <li>En el panel, agregá una tarjeta <b>Página web</b> (Webpage) con la URL <code>/local/colegio3d.html</code>. También podés usar un panel lateral con la integración Webpage.</li>
+    <li>Al abrirse dentro de Home Assistant, la etiqueta de arriba cambia a “En vivo”: luces, ventiladores, aires, proyector, pantalla, humo y cortes se dibujan según el estado real de las entidades, y los botones de modo cambian los <code>input_select</code> de cada área.</li>
+    <li>Si alguna entidad tiene otro nombre en tu instalación, corregila en el bloque <code>ENT</code> al inicio del script. Las que no se encuentran se listan debajo de los botones.</li>
+  </ol>
+  <p class="note">La conexión usa la sesión ya abierta de Home Assistant (la página se sirve desde el mismo servidor), así que no hace falta un token.</p>
+</details>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+<script>
+{
+/* ===== Entidades de Home Assistant (según las tablas de entidades de la tesis) ===== */
+const ENT={
+  biblioteca:{'L:1':'light.zona_1','L:2':'light.zona_2','L:3':'light.zona_3','L:4':'light.zona_4','F:1':'fan.ventilador_1','F:2':'fan.ventilador_2',
+    'AC:1':'climate.aire_biblioteca_1','AC:2':'climate.aire_biblioteca_2','AC:3':'climate.aire_biblioteca_3','SMOKE':'binary_sensor.humo_biblioteca',
+    sensors:[['Temperatura','sensor.temperatura_biblioteca'],['Humedad','sensor.humedad_biblioteca'],['CO₂','sensor.co2_biblioteca'],['Luz','sensor.luminosidad_biblioteca'],['Consumo','sensor.consumo_total_biblioteca']]},
+  laboratorio:{'L:front':'light.lab_iluminacion_zona_pizarron','L:rear':'light.lab_iluminacion_zona_general','F:1':'fan.lab_ventilador_1','F:2':'fan.lab_ventilador_2','F:3':'fan.lab_ventilador_3','F:4':'fan.lab_ventilador_4',
+    'AC:1':'climate.aire_lab_1','AC:2':'climate.aire_lab_2','PROJ':'switch.lab_proyector','PANEL':'switch.lab_panel_interactivo','SCREEN':'cover.lab_pantalla_proyeccion',select:'input_select.lab_modo_clase',
+    sensors:[['Temperatura','sensor.temperatura_lab'],['Humedad','sensor.humedad_lab'],['CO₂','sensor.co2_lab'],['Luz','sensor.luminosidad_lab']]},
+  multiusos:{'L:1':'light.multiusos_iluminacion_zona_1','L:2':'light.multiusos_iluminacion_zona_2','L:3':'light.multiusos_iluminacion_zona_3','L:4':'light.multiusos_iluminacion_zona_4',
+    'F:1':'fan.multiusos_ventilador_1','F:2':'fan.multiusos_ventilador_2','F:3':'fan.multiusos_ventilador_3','F:4':'fan.multiusos_ventilador_4',
+    'AC:1':'climate.aire_multiusos_1','AC:2':'climate.aire_multiusos_2','AC:3':'climate.aire_multiusos_3','PROJ':'switch.multiusos_proyector','AUDIO':'switch.multiusos_audio','SCREEN':'cover.multiusos_pantalla_proyeccion','SMOKE':'binary_sensor.humo_multiusos',select:'input_select.multiusos_modo_salon',
+    sensors:[['Temperatura','sensor.temperatura_multiusos'],['Humedad','sensor.humedad_multiusos'],['CO₂','sensor.co2_multiusos'],['Luz','sensor.luminosidad_multiusos']]},
+  administrativa:{'L:aa':'light.administrativa_iluminacion_zona_area','L:od':'light.administrativa_iluminacion_zona_oficina','F:aa1':'fan.administrativa_ventilador_aa_1','F:aa2':'fan.administrativa_ventilador_aa_2','F:od1':'fan.administrativa_ventilador_od_1',
+    'AC:aa1':'climate.aire_administrativa_aa_1','AC:aa2':'climate.aire_administrativa_aa_2','AC:od1':'climate.aire_administrativa_od_1','CUT:aa':'switch.corte_aa_administrativa','CUT:od':'switch.corte_od_administrativa',select:'input_select.administrativa_modo',
+    sensors:[['Tensión AA','sensor.voltaje_aa'],['Corriente AA','sensor.corriente_aa'],['Tensión OD','sensor.voltaje_od'],['Corriente OD','sensor.corriente_od'],['Temp. AA','sensor.temperatura_aa'],['Temp. OD','sensor.temperatura_od']]}
+};
+const SCREEN_DOWN_STATES=['closed','closing']; // estados de la cover que significan "pantalla abajo"
+const SCREEN_FOLLOWS_PROJECTOR=true; // la pantalla también baja siempre que el proyector esté encendido
+
+const MK={1:"#701A75",2:"#F59E0B",3:"#22C55E",4:"#EF4444",5:"#A855F7",6:"#14B8A6",7:"#EC4899",8:"#3B82F6",9:"#3B82F6",10:"#84CC16",11:"#DC2626",12:"#F97316",13:"#0EA5E9"};
+const ALLON={'L:*':1,'F:*':1,'AC:*':1};
+
+/* ===== Escena ===== */
+const stage=document.getElementById('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+stage.prepend(renderer.domElement);
+const lr=new THREE.CSS2DRenderer();lr.domElement.className='lbl';stage.insertBefore(lr.domElement,stage.querySelector('.views'));
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x1d1d20);
+scene.add(new THREE.HemisphereLight(0xffffff,0x555555,0.45));
+const sun=new THREE.DirectionalLight(0xfff4e0,0.35);sun.position.set(3,10,-6);scene.add(sun);
+const cam=new THREE.PerspectiveCamera(45,1,0.1,200);
+const ctl=new THREE.OrbitControls(cam,renderer.domElement);ctl.enableDamping=true;ctl.maxPolarAngle=Math.PI*0.49;ctl.minDistance=3;ctl.maxDistance=45;
+const H=3;
+const M=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:0.8},o));
+const MAT={wall:M(0xeeebe4,{side:THREE.DoubleSide}),glass:M(0x9fd8e6,{transparent:true,opacity:0.55,roughness:0.2}),curtain:M(0xa52a2a),white:M(0xf7f7f7),grey:M(0x888888),dark:M(0x1b1b1b),
+  desk:M(0xf2f0ea),wood:M(0x8b6a4a),chair:M(0xc62828,{roughness:0.6}),black:M(0x222222),scr:M(0x2a3f5a,{emissive:0x0d1a2a}),shelf:M(0x7a5536),books:M(0x4f6d8f),door:M(0x7a5536)};
+let root,ctx,labels=[];
+let pickKey=null;
+function box(w,h,d,mat,x,y,z,p){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);if(pickKey)m.userData.k=pickKey;(p||root).add(m);return m}
+function tag(n,x,y,z){const d=document.createElement('div');d.className='mk';d.textContent=n;d.style.background=MK[n];const o=new THREE.CSS2DObject(d);o.position.set(x,y,z);o.visible=showL;root.add(o);labels.push(o)}
+function floorTex(W,D){const cv=document.createElement('canvas');cv.width=cv.height=256;const g=cv.getContext('2d');g.fillStyle='#c9c6bf';g.fillRect(0,0,256,256);g.strokeStyle='#a9a59d';g.lineWidth=3;
+  for(let i=0;i<=256;i+=64){g.beginPath();g.moveTo(i,0);g.lineTo(i,256);g.stroke();g.beginPath();g.moveTo(0,i);g.lineTo(256,i);g.stroke()}
+  const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(W/2,D/2);return t}
+function room(W,D,win){
+  const f=new THREE.Mesh(new THREE.PlaneGeometry(W,D),M(0xffffff,{map:floorTex(W,D)}));f.rotation.x=-Math.PI/2;f.position.set(W/2,0,D/2);root.add(f);ctx.floor=f;
+  const mk=(cx,cz,len,rot,nx,nz,ws)=>{const g=new THREE.Group();g.position.set(cx,0,cz);g.rotation.y=rot;root.add(g);box(len,H,0.12,MAT.wall,0,H/2,0,g);
+    (ws||[]).forEach(w=>{box(w[1]-w[0],1.1,0.14,MAT.glass,(w[0]+w[1])/2-len/2,1.75,0,g);box(0.3,1.5,0.18,MAT.curtain,w[0]-len/2+0.18,1.6,0,g)});
+    ctx.walls.push({g,c:new THREE.Vector3(cx,0,cz),n:new THREE.Vector3(nx,0,nz)})};
+  mk(W/2,0,W+0.12,0,0,-1,win.n);mk(W/2,D,W+0.12,0,0,1,win.s);mk(0,D/2,D,Math.PI/2,-1,0,win.w);mk(W,D/2,D,Math.PI/2,1,0,win.e);
+}
+function lum(x,z,key,along){pickKey=key;const tube=M(0xffffff,{emissive:0xfff6dd,emissiveIntensity:1});const a=along==='x';
+  box(a?1.25:0.3,0.06,a?0.3:1.25,MAT.white,x,H-0.12,z);[-0.07,0.07].forEach(o=>box(a?1.15:0.08,0.04,a?0.08:1.15,tube,x+(a?0:o),H-0.17,z+(a?o:0)));
+  const L=new THREE.PointLight(0xfff3dc,0.5,9,1.6);L.position.set(x,H-0.4,z);root.add(L);pickKey=null;ctx.dev.push({k:key,type:'L',tube,L,zone:key.split(':')[1]});tag(2,x,H-0.05,z)}
+function fan(x,z,key,zone){pickKey=key;box(0.04,0.5,0.04,MAT.grey,x,H-0.25,z);const hub=new THREE.Group();hub.position.set(x,H-0.52,z);root.add(hub);box(0.22,0.1,0.22,MAT.white,0,0,0,hub);
+  for(let i=0;i<3;i++){const p=new THREE.Group();p.rotation.y=i*2*Math.PI/3;hub.add(p);box(0.62,0.015,0.14,MAT.white,0.38,0,0,p)}
+  pickKey=null;ctx.dev.push({k:key,type:'F',hub,zone});tag(3,x,H-0.35,z)}
+function ac(x,z,wall,key,zone){pickKey=key;const r=wall==='n'||wall==='s';const sx=r?0.95:0.25,sz=r?0.25:0.95;const off=wall==='n'?0.2:wall==='s'?-0.2:wall==='w'?0.2:-0.2;
+  const px=r?x:x+off,pz=r?z+off:z;box(sx,0.32,sz,MAT.white,px,2.35,pz);const led=M(0x222222,{emissive:0});box(r?0.08:0.03,0.04,r?0.03:0.08,led,px+(r?0.35:off*0.6),2.25,pz+(r?off*0.6:0.35));
+  pickKey=null;ctx.dev.push({k:key,type:'AC',led,zone});tag(4,px,2.65,pz)}
+function outlet(x,z){box(0.1,0.12,0.1,MAT.white,x,0.35,z);tag(5,x,0.62,z)}
+function sensor(n,x,z,y){box(0.12,0.05,0.12,MAT.white,x,(y||H)-0.03,z);tag(n,x,(y||H)-0.2,z)}
+function desks(x0,z0,z1,x,seats){const L=z1-z0,zc=(z0+z1)/2;box(0.62,0.04,L,MAT.desk,x,0.75,zc);box(0.6,0.73,0.04,MAT.desk,x,0.37,z0+0.03);box(0.6,0.73,0.04,MAT.desk,x,0.37,z1-0.03);
+  for(let i=0;i<seats;i++){const z=z0+0.3+i*(L-0.6)/Math.max(seats-1,1);box(0.04,0.3,0.46,MAT.dark,x+0.2,0.94,z);box(0.01,0.26,0.42,MAT.scr,x+0.177,0.95,z);chair(x-0.55,z,'x')}}
+function chair(x,z,face){box(0.42,0.05,0.42,MAT.chair,x,0.46,z);const b=face==='x'?[-0.23,0]:face==='z'?[0,-0.23]:[0,0.23];box(face==='x'?0.05:0.42,0.42,face==='x'?0.42:0.05,MAT.chair,x+b[0],0.7,z+b[1]);box(0.04,0.44,0.04,MAT.black,x,0.22,z)}
+function table(x,z,w,d,seatsAlong){box(w,0.04,d,MAT.wood,x,0.75,z);box(w-0.1,0.71,d-0.1,M(0x6e523a),x,0.37,z);
+  for(let i=0;i<seatsAlong;i++){const xx=x-w/2+(i+0.5)*w/seatsAlong;chair(xx,z-d/2-0.35,'z');chair(xx,z+d/2+0.35,'-z')}}
+function screenEast(x,z,w){pickKey='SCREEN';box(0.06,0.12,w+0.2,MAT.black,x-0.1,2.78,z);const s=box(0.02,1.6,w,M(0xffffff,{emissive:0}),x-0.07,0,z);s.geometry.translate(0,-0.8,0);s.position.y=2.72;s.scale.y=0.03;ctx.screen=s;pickKey=null}
+function screenSouth(x,z,w){pickKey='SCREEN';box(w+0.2,0.12,0.06,MAT.black,x,2.78,z-0.1);const s=box(w,1.6,0.02,M(0xffffff,{emissive:0}),x,0,z-0.07);s.geometry.translate(0,-0.8,0);s.position.y=2.72;s.scale.y=0.03;ctx.screen=s;pickKey=null}
+function beam(from,to,len){pickKey='PROJ';box(0.4,0.15,0.35,MAT.white,from[0],H-0.3,from[2]);pickKey=null;const b=new THREE.Mesh(new THREE.ConeGeometry(1.25,len,4,1,true),new THREE.MeshBasicMaterial({color:0xfff7cc,transparent:true,opacity:0.12,depthWrite:false,side:THREE.DoubleSide}));
+  b.position.set((from[0]+to[0])/2,2.25,(from[2]+to[2])/2);if(to[0]!==from[0]){b.rotation.z=Math.PI/2;b.rotation.x=Math.PI/4}else{b.rotation.x=-Math.PI/2;b.rotation.y=Math.PI/4}root.add(b);ctx.beam=b}
+function alarm(x,z){const m=M(0x441111,{emissive:0});box(0.25,0.08,0.25,m,x,H-0.04,z);ctx.alarm=m}
+
+/* ===== Áreas ===== */
+const AREAS={
+ biblioteca:{name:"Biblioteca",W:12,D:8,door:[6,8],
+  leg:[[1,"SNZB-04P","Ventanas"],[2,"ZBMINIL2","4 zonas de luces"],[3,"iFan04-H","2 ventiladores"],[4,"POWR3","3 aires acondicionados"],[5,"S40 Lite","8 tomacorrientes"],[6,"SNZB-02D","Temperatura y humedad"],[7,"SNZB-06P","Presencia"],[8,"SNZB-04P","Puerta principal"],[10,"AirGuard SAWF-08P","CO₂"],[11,"Sensor de humo","Punto más alto"]],
+  note:"96 m² · 20 personas · 9.880 W. Mesas y estanterías aproximadas.",
+  build(){room(12,8,{n:[[0.6,2.6],[3.4,5.4],[6.4,8.4],[9.3,11.4]],s:[[0.6,3.4],[8.0,11.4]]});
+    box(1.6,2.1,0.16,MAT.door,6,1.05,8);
+    [[2.0,2.6,'L:1'],[3.9,2.6,'L:1'],[2.0,5.3,'L:2'],[3.9,5.3,'L:2'],[7.7,2.6,'L:3'],[9.6,2.6,'L:3'],[7.7,5.3,'L:4'],[9.6,5.3,'L:4']].forEach(a=>lum(a[0],a[1],a[2]));
+    fan(5.8,2.6,'F:1');fan(5.8,5.3,'F:2');
+    [2.1,5.9,9.7].forEach((x,i)=>ac(x,0,'n','AC:'+(i+1)));
+    [[1.0,0.08],[7.7,0.08],[2.0,7.92],[7.6,7.92]].forEach(a=>outlet(a[0],a[1]));
+    [1.5,3.0,4.9,6.7,8.7,10.6].forEach(x=>tag(1,x,1.2,0.1));[1.1,2.8,8.7,10.6].forEach(x=>tag(1,x,1.2,7.9));
+    sensor(6,5.5,3.6);sensor(10,5.5,4.4);sensor(11,6.2,4.0);alarm(6.2,4.0);sensor(7,6.0,7.1);tag(8,6.0,2.3,7.9);tag(2,4.6,1.4,7.9);tag(2,8.1,1.4,7.9);
+    [[0.25,'x'],[11.75,'x']].forEach(([x])=>[1.6,4.0,6.4].forEach(z=>{box(0.4,2.0,2.0,MAT.shelf,x,1.0,z);[0.4,0.9,1.4,1.85].forEach(y=>box(0.34,0.3,1.9,MAT.books,x,y+0.02,z))}));
+    table(2.95,2.6,1.6,0.9,2);table(2.95,5.3,1.6,0.9,2);table(8.65,2.6,1.6,0.9,2);table(8.65,5.3,1.6,0.9,2);table(5.8,3.95,1.6,0.9,2);},
+  scen:{presencia:{n:"Con presencia",s:ALLON,d:"Hay personas: luces por zona encendidas, ventiladores y aires en automático."},
+   natural:{n:"Luz natural suficiente",s:{'F:*':1,'AC:*':1},d:"El sensor de luz detecta iluminación natural suficiente: las luminarias quedan apagadas."},
+   vacia:{n:"Sin presencia",s:{},d:"Sin ocupación se apagan luces, ventiladores y aires."},
+   humo:{n:"Humo detectado",s:{'L:*':1,SMOKE:1},d:"Humo: se encienden las luces para la evacuación y se apagan los aires; llega la notificación de alerta."}}},
+ laboratorio:{name:"Laboratorio de informática",W:8,D:8,door:[7.1,8],
+  leg:[[2,"ZBMINIL2","2 zonas de luces"],[3,"iFan04-H","4 ventiladores"],[4,"POWR3","2 aires de 24.000 BTU"],[5,"S40 Lite","17 tomacorrientes"],[6,"SNZB-02D","Temperatura y humedad"],[7,"SNZB-06P","Presencia y luz"],[9,"RM4 Pro","IR proyector y audio"],[10,"AirGuard SAWF-08P","CO₂"],[12,"DUALR3","Pantalla motorizada"]],
+  note:"64 m² · 30 estudiantes · 7.940 W. Los 30 puestos con PC son aproximados.",
+  build(){room(8,8,{n:[[0.5,2.4],[3.0,5.0],[5.6,7.4]],s:[[0.5,2.4],[3.0,5.0]]});box(1.5,2.1,0.16,MAT.door,7.1,1.05,8);
+    [[1.1,'L:rear'],[5.0,'L:front']].forEach(([x,k])=>[2.7,5.3].forEach(z=>lum(x,z,k)));
+    [[3.1,2.7],[7.0,2.7],[3.1,5.3],[7.0,5.3]].forEach((a,i)=>fan(a[0],a[1],'F:'+(i+1)));
+    ac(0,2.65,'w','AC:1');ac(0,5.3,'w','AC:2');
+    [[2.1,0.08],[4.1,0.08],[6.2,0.08],[0.08,1.2],[0.08,6.9],[2.1,7.92],[4.1,7.92]].forEach(a=>outlet(a[0],a[1]));
+    sensor(6,4.0,2.9);sensor(10,4.4,3.8);sensor(7,4.0,5.0);
+    screenEast(8,4,2.4);box(0.06,0.1,0.1,MAT.dark,7.93,2.4,3.6);tag(9,7.85,2.65,3.2);box(0.06,0.12,0.1,MAT.white,7.93,2.75,5.2);tag(12,7.85,2.65,5.45);
+    const pm=M(0x111111,{emissive:0});pickKey='PANEL';box(0.06,0.85,1.45,MAT.black,7.92,1.35,6.6);box(0.02,0.75,1.35,pm,7.88,1.35,6.6);pickKey=null;ctx.panel=pm;
+    beam([4.6,0,4],[7.9,0,4],3.3);
+    [1.5,3.1,4.7].forEach(x=>[[0.6,3.6],[4.4,7.4]].forEach(([a,b])=>desks(0,a,b,x,5)));
+    box(0.7,0.04,1.4,MAT.wood,6.7,0.75,1.6);box(0.68,0.73,1.36,M(0x6e523a),6.7,0.37,1.6);},
+  scen:{normal:{n:"Normal",s:ALLON,d:"Luces delanteras y traseras encendidas; proyector y panel apagados; clima en automático."},
+   proyeccion:{n:"Proyección",s:{'L:rear':1,'F:*':1,'AC:*':1,PROJ:1,SCREEN:1,PANEL:1},d:"Se apagan las luces del frente, baja la pantalla y se encienden el proyector y el audio."},
+   pizarra:{n:"Pizarra interactiva",s:{'L:rear':1,'F:*':1,'AC:*':1,PROJ:1,SCREEN:1,PANEL:1},d:"Igual que Proyección, con el panel interactivo encendido."},
+   ahorro:{n:"Ahorro",s:{},d:"Tras 2 minutos sin presencia se apaga todo; al detectar actividad vuelve a Normal."}}},
+ multiusos:{name:"Salón multiusos",W:16,D:8,door:[1.1,8],
+  leg:[[2,"ZBMINIL2","4 zonas de luces"],[3,"iFan04-H","4 ventiladores"],[4,"POWR3","3 aires acondicionados"],[5,"S40 Lite","8 tomacorrientes"],[6,"SNZB-02D","Temperatura y humedad"],[7,"SNZB-06P","Presencia"],[9,"RM4 Pro","IR proyector y audio"],[10,"AirGuard SAWF-08P","CO₂"],[11,"Sensor de humo","Punto más alto"],[12,"DUALR3","Pantalla motorizada"]],
+  note:"128 m² · 100 personas · 12.500 W. Las 100 sillas son aproximadas.",
+  build(){room(16,8,{n:[[0.8,3.4],[5.0,7.0],[8.8,10.8],[12.6,15.2]],s:[[3.0,7.5],[11.0,13.2]]});box(1.9,2.1,0.16,MAT.door,1.1,1.05,8);box(1.9,2.1,0.16,MAT.door,14.85,1.05,8);
+    [[4.1,2.7,'L:1'],[6.1,2.7,'L:1'],[9.9,2.7,'L:2'],[11.9,2.7,'L:2'],[4.1,5.5,'L:3'],[6.1,5.5,'L:3'],[9.9,5.5,'L:4'],[11.9,5.5,'L:4']].forEach(a=>lum(a[0],a[1],a[2],'x'));
+    [4.1,6.1,9.9,11.9].forEach((x,i)=>fan(x,4.1,'F:'+(i+1)));
+    ac(4.0,0,'n','AC:1');ac(11.9,0,'n','AC:2');ac(16,4.1,'e','AC:3');
+    [[2.3,0.08],[7.8,0.08],[13.9,0.08],[4.0,7.92],[8.1,7.92],[12.0,7.92]].forEach(a=>outlet(a[0],a[1]));
+    sensor(6,7.8,4.1);sensor(10,10.8,2.5);sensor(11,7.0,7.3);alarm(7.0,7.3);sensor(7,14.7,6.8);
+    screenSouth(8.8,8,3.0);box(0.1,0.1,0.06,MAT.dark,9.6,2.4,7.93);tag(9,9.6,2.6,7.85);box(0.1,0.12,0.06,MAT.white,10.5,2.75,7.93);tag(12,10.5,2.4,7.85);
+    beam([8.8,0,3.2],[8.8,0,7.9],4.7);
+    box(2.2,0.04,0.7,MAT.wood,8.0,0.75,6.7);box(2.1,0.71,0.6,M(0x6e523a),8.0,0.37,6.7);
+    [[3.4,6.0],[9.6,12.2]].forEach(([x0,x1])=>{for(let r=0;r<10;r++)for(let c=0;c<5;c++)chair(x0+c*(x1-x0)/4,0.8+r*0.52,'z')})},
+  scen:{reunion:{n:"Reunión",s:ALLON,d:"Luces del frente encendidas, audio y proyector apagados, clima en automático."},
+   conferencia:{n:"Conferencia",s:{'L:1':1,'L:2':1,'F:*':1,'AC:*':1,PROJ:1,SCREEN:1,AUDIO:1},d:"Se apagan las luces del frente, se encienden audio, micrófonos y proyector."},
+   proyeccion:{n:"Proyección",s:{'L:1':1,'L:2':1,'F:*':1,'AC:*':1,PROJ:1,SCREEN:1,AUDIO:1},d:"Frente a oscuras para proyectar, con la pantalla abajo."},
+   evento:{n:"Evento",s:{'L:*':1,'F:*':1,'AC:*':1,PROJ:1,SCREEN:1},d:"Luces encendidas, proyector encendido y ventiladores al 66 %."},
+   ventilacion:{n:"Ventilación",s:{'L:*':1,'F:*':1},d:"Ventiladores encendidos para renovar el aire."},
+   ahorro:{n:"Ahorro",s:{},d:"Sin presencia se apaga todo."},
+   emergencia:{n:"Emergencia",s:{'L:*':1,SMOKE:1},d:"Humo detectado: luces encendidas para evacuar; aires, ventiladores y audiovisual apagados."}}},
+ administrativa:{name:"Área administrativa – Dirección",W:9,D:8,door:[5.85,8],
+  leg:[[2,"ZBMINIL2","Luces (3 AA + 1 OD)"],[3,"iFan04-H","Ventiladores (2 + 1)"],[4,"POWR3","Aires (2 + 1)"],[5,"S40 Lite","Tomas (4 + 3)"],[6,"SNZB-02D","Temp. y humedad por zona"],[7,"SNZB-06P","Presencia por zona"],[8,"SNZB-04P","Puerta de la Dirección"],[13,"BASIC-1GSP ×2","Tablero, uno por zona"]],
+  note:"72 m² · 6 personas · 8.450 W. AA = área administrativa, OD = Oficina del Director/a. La iluminación no pasa por los BASIC-1GSP.",
+  build(){room(9,8,{n:[[0.6,2.6],[5.2,8.4]],s:[[0.5,3.6]]});box(1.1,2.1,0.16,MAT.door,5.85,1.05,8);
+    box(0.12,2.6,2.1,MAT.wall,4.55,1.3,1.05);box(0.12,2.6,0.75,MAT.wall,4.55,1.3,3.58);box(4.45,2.6,0.12,MAT.wall,6.78,1.3,3.95);box(0.06,2.0,0.9,MAT.door,4.6,1.0,2.65);
+    const zf=M(0xff3b3b,{transparent:true,opacity:0,depthWrite:false});[[4.55,8,2.275,4],[4.45,4.05,6.78,5.98]].forEach(([w,d,x,z])=>{const pl=new THREE.Mesh(new THREE.PlaneGeometry(w,d),zf);pl.rotation.x=-Math.PI/2;pl.position.set(x,0.01,z);root.add(pl)});
+    const zo=M(0xff3b3b,{transparent:true,opacity:0,depthWrite:false});const zom=new THREE.Mesh(new THREE.PlaneGeometry(4.45,3.95),zo);zom.rotation.x=-Math.PI/2;zom.position.set(6.78,0.02,1.98);root.add(zom);ctx.cutFloor={aa:zf,od:zo};
+    lum(2.2,0.7,'L:aa');lum(2.2,4.0,'L:aa');lum(2.2,7.3,'L:aa');lum(6.75,6.0,'L:aa');lum(7.3,2.0,'L:od');
+    fan(2.2,2.05,'F:aa1','aa');fan(2.2,6.0,'F:aa2','aa');fan(6.3,2.05,'F:od1','od');
+    ac(3.2,0,'n','AC:aa1','aa');ac(0,6.0,'w','AC:aa2','aa');ac(6.0,0,'n','AC:od1','od');
+    [[1.9,0.08],[1.9,7.92],[4.6,7.92],[5.0,7.92],[4.7,2.4],[8.92,2.0],[8.92,3.4]].forEach(a=>outlet(a[0],a[1]));
+    sensor(6,3.5,4.1);sensor(6,6.8,1.2);sensor(7,4.2,5.3);sensor(7,6.8,2.4);tag(8,4.75,2.3,2.65);
+    const pan=M(0x333333,{emissive:0});box(0.18,0.8,0.6,pan,0.12,1.5,7.5);tag(13,0.3,2.05,7.5);ctx.tablero=pan;
+    [[1.6,1.6],[1.6,3.4],[3.2,5.5],[1.6,5.8]].forEach(([x,z])=>{box(1.2,0.04,0.65,MAT.desk,x,0.75,z);box(1.15,0.71,0.6,M(0xd8d5ce),x,0.37,z);box(0.04,0.3,0.46,MAT.dark,x,0.94,z-0.15);chair(x,z+0.6,'-z')});
+    box(1.6,0.04,0.8,MAT.wood,6.9,0.75,1.7);box(1.5,0.71,0.7,M(0x6e523a),6.9,0.37,1.7);chair(6.9,1.0,'z');chair(6.5,2.6,'-z');chair(7.3,2.6,'-z');
+    [[6.2,6.6],[7.6,5.2]].forEach(([x,z])=>{box(1.4,0.9,0.45,M(0x9a9a9a),x,0.45,z)})},
+  scen:{normal:{n:"Normal",s:ALLON,d:"Las dos zonas funcionan con clima y luces según presencia."},
+   ahorro:{n:"Ahorro",s:{},d:"Sin presencia en ambas zonas: luces, ventiladores y aires apagados."},
+   faa:{n:"Falla zona AA",s:Object.assign({'CUT:aa':1},ALLON),d:"Tensión o corriente fuera de umbral en el área administrativa: el BASIC-1GSP corta solo esa zona. La iluminación sigue encendida. La reposición es manual."},
+   fod:{n:"Falla Dirección",s:Object.assign({'CUT:od':1},ALLON),d:"Falla en la Oficina del Director/a: se corta solo esa zona."},
+   fgen:{n:"Falla general",s:Object.assign({'CUT:aa':1,'CUT:od':1},ALLON),d:"Ambas zonas fallan a la vez: posible falla de la acometida, se cortan las dos."}}}
+};
+
+/* ===== Estado y dibujo ===== */
+let area='laboratorio',st={},cur=null,showL=true,hass=null;
+const get=(k)=>{if(k in st)return !!st[k];const p=k.split(':')[0]+':*';return !!st[p]};
+function applyState(){
+  const cut=z=>z&&get('CUT:'+z);
+  ctx.dev.forEach(d=>{
+    if(d.type==='L'){const on=get(d.k);d.L.visible=on;d.tube.emissiveIntensity=on?1:0}
+    if(d.type==='F')d.on=get(d.k)&&!cut(d.zone);
+    if(d.type==='AC')d.led.emissive.setHex(get(d.k)&&!cut(d.zone)?0x22ff66:0);
+  });
+  if(ctx.beam)ctx.beam.visible=get('PROJ');
+  if(ctx.screen)ctx.screen.material.emissive.setHex(get('PROJ')?0x8a8670:0);
+  if(ctx.panel)ctx.panel.emissive.setHex(get('PANEL')?0x2b5d8a:0);
+  if(ctx.alarm)ctx.alarm.emissive.setHex(get('SMOKE')?0xff2020:0);
+  if(ctx.cutFloor){ctx.cutFloor.aa.opacity=get('CUT:aa')?0.18:0;ctx.cutFloor.od.opacity=get('CUT:od')?0.25:0;ctx.tablero.emissive.setHex(get('CUT:aa')||get('CUT:od')?0x661111:0)}
+  const keys=[...new Set(ctx.dev.map(d=>d.type))];
+  const nm={L:'Luces',F:'Ventiladores',AC:'Aires'};
+  let h=keys.map(t=>{const ds=ctx.dev.filter(d=>d.type===t);const n=ds.filter(d=>t==='L'?d.L.visible:t==='F'?d.on:d.led.emissive.getHex()>0).length;return `<div class="st"><b>${nm[t]}</b><span class="${n?'on':'off'}">${n} de ${ds.length}</span></div>`}).join('');
+  if(ctx.beam)h+=`<div class="st"><b>Proyector</b><span class="${get('PROJ')?'on':'off'}">${get('PROJ')?'Encendido':'Apagado'}</span></div>`;
+  if(ctx.screen){const raw=hass&&ENT[area].SCREEN&&hass.states[ENT[area].SCREEN];h+=`<div class="st"><b>Pantalla</b><span class="${get('SCREEN')?'on':'off'}">${get('SCREEN')?'Abajo':'Arriba'}</span>${raw?`<b>estado: ${esc(raw.state)}</b>`:''}</div>`}
+  if(ctx.alarm)h+=`<div class="st"><b>Humo</b><span class="${get('SMOKE')?'bad':'off'}">${get('SMOKE')?'Detectado':'Normal'}</span></div>`;
+  if(ctx.cutFloor)['aa','od'].forEach(z=>h+=`<div class="st"><b>Zona ${z.toUpperCase()}</b><span class="${get('CUT:'+z)?'bad':'on'}">${get('CUT:'+z)?'Cortada':'Normal'}</span></div>`);
+  if(hass){(ENT[area].sensors||[]).forEach(([n,e])=>{const s=hass.states[e];h+=`<div class="st"><b>${esc(n)}</b><span>${s?esc(s.state+' '+(s.attributes.unit_of_measurement||'')):'—'}</span></div>`})}
+  document.getElementById('state').innerHTML=h;
+  renderCtrls();
+}
+function label(k){const [t,id]=k.split(':');const z={front:'del frente',rear:'traseras',aa:'AA',od:'Dirección'};
+  const n=id?(z[id]||id.replace(/^aa/,'AA ').replace(/^od/,'OD ')):'';
+  return {L:'Luces '+(z[id]?z[id]:'zona '+id),F:'Ventilador '+n,AC:'Aire '+n,CUT:'Corte zona '+(id==='aa'?'AA':'Dirección'),PROJ:'Proyector',AUDIO:'Audio',PANEL:'Panel interactivo',SCREEN:'Pantalla abajo'}[t]}
+function ctrlKeys(){return Object.keys(ENT[area]).filter(k=>!['sensors','select','SMOKE'].includes(k))}
+function renderCtrls(){const el=document.getElementById('ctrls');
+  el.innerHTML=ctrlKeys().map(k=>`<button data-k="${k}" class="${k.startsWith('CUT')?'cut':''}" aria-pressed="${get(k)}">${esc(label(k))}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>toggle(b.dataset.k)))}
+function toggle(k){
+  if(!hass){st[k]=!get(k);if(k==='PROJ'&&st[k])st.SCREEN=true;applyState();return}
+  const e=ENT[area][k],s=e&&hass.states[e];if(!s){document.getElementById('desc').textContent='No se encontró '+(e||k)+' en Home Assistant.';return}
+  const dom=e.split('.')[0];
+  if(dom==='climate'){if(s.state==='off'){const m=(s.attributes.hvac_modes||[]).filter(x=>x!=='off');hass.callService('climate','set_hvac_mode',{entity_id:e,hvac_mode:m.includes('cool')?'cool':(m[0]||'auto')})}else hass.callService('climate','set_hvac_mode',{entity_id:e,hvac_mode:'off'});return}
+  if(dom==='cover'){const down=SCREEN_DOWN_STATES.includes(s.state);const wantDown=!down;hass.callService('cover',(wantDown===SCREEN_DOWN_STATES.includes('closed'))?'close_cover':'open_cover',{entity_id:e});return}
+  hass.callService(['light','fan','switch','input_boolean'].includes(dom)?dom:'homeassistant','toggle',{entity_id:e});
+}
+const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function buildModes(){
+  const A=AREAS[area],box_=document.getElementById('modes');
+  if(hass){const sel=ENT[area].select,s=sel&&hass.states[sel];
+    document.getElementById('mtitle').textContent=s?'Modo (Home Assistant)':'Estado en vivo';
+    box_.innerHTML=s?(s.attributes.options||[]).map(o=>`<button data-o="${esc(o)}" aria-pressed="${o===s.state}">${esc(o)}</button>`).join(''):'';
+    box_.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>hass.callService('input_select','select_option',{entity_id:sel,option:b.dataset.o})));
+    const miss=Object.entries(ENT[area]).filter(([k,v])=>typeof v==='string'&&!hass.states[v]).map(([k,v])=>v);
+    document.getElementById('desc').textContent=miss.length?'No se encontraron: '+miss.join(', ')+'. Corregí los nombres en el bloque ENT.':'Todas las entidades del área están conectadas.';
+    return}
+  document.getElementById('mtitle').textContent=area==='biblioteca'||area==='administrativa'?'Escenarios':'Modo de funcionamiento';
+  box_.innerHTML=Object.entries(A.scen).map(([k,v])=>`<button data-m="${k}" aria-pressed="${k===cur}">${v.n}</button>`).join('');
+  box_.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>setScen(b.dataset.m)));
+}
+function setScen(k){cur=k;const s=AREAS[area].scen[k];st=Object.assign({},s.s);document.getElementById('desc').textContent=s.d;
+  document.querySelectorAll('#modes button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===k));applyState()}
+
+function readHass(){
+  const E=ENT[area],on=['on','heat','cool','heat_cool','auto','dry','fan_only','open','opening'];st={};
+  Object.entries(E).forEach(([k,e])=>{if(typeof e!=='string'||k==='select')return;const s=hass.states[e];if(!s)return;
+    st[k]=k==='SCREEN'?SCREEN_DOWN_STATES.includes(s.state):on.includes(s.state)});
+  if(SCREEN_FOLLOWS_PROJECTOR&&st.PROJ)st.SCREEN=true;
+  applyState();const sel=E.select&&hass.states[E.select];
+  if(sel)document.querySelectorAll('#modes button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.o===sel.state));
+}
+
+function load(a){
+  if(!AREAS[a])a='laboratorio';area=a;if(root){scene.remove(root);labels.forEach(l=>l.element.remove())}
+  root=new THREE.Group();scene.add(root);labels=[];ctx={dev:[],walls:[]};AREAS[a].build();
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.a===a));
+  const A=AREAS[a];document.getElementById('legend').innerHTML=A.leg.map(l=>`<li><span class="mk" style="background:${MK[l[0]]}">${l[0]}</span><span><b>${l[1]}</b><small>${l[2]}</small></span></li>`).join('');
+  document.getElementById('note').textContent=A.note;
+  view('general');buildModes();
+  if(hass)readHass();else setScen(Object.keys(A.scen)[0]);
+}
+function view(k){const A=AREAS[area],W=A.W,D=A.D,m=Math.max(W,D);let p,t;
+  if(k==='planta'){p=[W/2,m*1.9,D/2+0.01];t=[W/2,0,D/2]}else if(k==='puerta'){p=[A.door[0],1.65,D+1.6];t=[W/2,1.2,D*0.4]}else{p=[-0.35*W,m*1.05,D+m*0.95];t=[W/2,0.8,D/2]}
+  cam.position.set(...p);ctl.target.set(...t);ctl.update()}
+document.querySelectorAll('.views button').forEach(b=>b.addEventListener('click',()=>view(b.dataset.v)));
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{location.hash=b.dataset.a}));
+window.addEventListener('hashchange',()=>load(location.hash.slice(1)));
+const tog=document.getElementById('tog');
+tog.addEventListener('click',()=>{showL=!showL;labels.forEach(l=>l.visible=showL);tog.textContent=showL?'Ocultar números':'Mostrar números';tog.setAttribute('aria-pressed',showL)});
+
+/* ===== Conexión con Home Assistant (solo si se sirve desde /local/ del mismo servidor) ===== */
+function findHass(){try{const h=window.parent!==window&&window.parent.document.querySelector('home-assistant');return h&&h.hass&&h.hass.states?h:null}catch(e){return null}}
+const haEl=findHass();
+if(haEl){hass=haEl.hass;const b=document.getElementById('badge');b.textContent='En vivo · Home Assistant';b.classList.add('live');
+  setInterval(()=>{const n=haEl.hass;if(n!==hass){hass=n;readHass();buildModes()}},1000)}
+
+const ray=new THREE.Raycaster(),mp=new THREE.Vector2();let down=null;
+renderer.domElement.addEventListener('pointerdown',e=>{down=[e.clientX,e.clientY]});
+renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;
+  const r=renderer.domElement.getBoundingClientRect();mp.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(mp,cam);
+  const hit=ray.intersectObjects(root.children,true).find(i=>{let o=i.object;while(o&&!o.userData.k&&o!==root)o=o.parent;return o&&o.userData.k&&o.visible!==false});
+  if(hit){let o=hit.object;while(!o.userData.k)o=o.parent;toggle(o.userData.k)}});
+function size(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h);lr.setSize(w,h);cam.aspect=w/h;cam.updateProjectionMatrix()}
+const ro=new ResizeObserver(size);ro.observe(stage);size();
+load(location.hash.slice(1)||'laboratorio');
+
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,tmp=new THREE.Vector3();
+function loop(){requestAnimationFrame(loop);
+  ctx.dev.forEach(d=>{if(d.type==='F'&&d.on&&!reduce)d.hub.rotation.y+=0.12});
+  if(ctx.screen){const t=get('SCREEN')?1:0.03;ctx.screen.scale.y+=(t-ctx.screen.scale.y)*(reduce?1:0.06)}
+  ctx.walls.forEach(w=>{tmp.copy(cam.position).sub(w.c);w.g.visible=tmp.dot(w.n)<0.2});
+  ctl.update();renderer.render(scene,cam);lr.render(scene,cam)}
+loop();
+}
+</script>
+</body>
+</html>
